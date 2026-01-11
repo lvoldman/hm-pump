@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sys
+import threading
+
 from PySide6 import QtCore, QtWidgets
 
 
@@ -89,12 +91,17 @@ class MotorPanel(QtWidgets.QGroupBox):
 
         self.btn_back = QtWidgets.QPushButton("◀ Move Backward")
         self.btn_fwd = QtWidgets.QPushButton("Move Forward ▶")
-        for b in (self.btn_back, self.btn_fwd):
+        self.btn_stop = QtWidgets.QPushButton("■ STOP")
+        
+        self.btn_stop.setStyleSheet("QPushButton { background-color: #e74c3c; color: white; }")
+        
+        for b in (self.btn_back, self.btn_fwd, self.btn_stop):
             b.setMinimumWidth(170)
             b.setFixedHeight(40)
 
         row_jog.addWidget(self.btn_back)
         row_jog.addWidget(self.btn_fwd)
+        row_jog.addWidget(self.btn_stop)
         row_jog.addStretch(1)
 
         # ---- Parameters (accel/vel)
@@ -176,27 +183,38 @@ class MotorPanel(QtWidgets.QGroupBox):
         self.btn_move_abs.clicked.connect(self._stub_move_abs)
         self.btn_fwd.clicked.connect(self._stub_move_fwd)
         self.btn_back.clicked.connect(self._stub_move_back)
+        self.btn_stop.clicked.connect(self._stub_move_stop)
 
         # initial status
         self.set_motor_status("off", "OFF")
+
+        print(f'Starting watchdog thread for I/O control ')
 
     # ---- Status API (GUI-only for now) ----
     def set_motor_status(self, lamp_state: str, text: str) -> None:
         self.motor_lamp.set_state(lamp_state)
         self.motor_status_text.setText(text)
+        print(f"Motor status set to: {lamp_state} / {text}")
 
     # ---- GUI-only stubs ----
     def _stub_move_abs(self):
         self.set_motor_status("ok", "RUNNING")
         self.running_time.setText("1.23")  # demo seconds
+        print("Stub: Move Absolute clicked")
 
     def _stub_move_fwd(self):
         self.set_motor_status("ok", "RUNNING")
         self.running_time.setText("0.80")  # demo seconds
+        print("Stub: Move Forward clicked")
 
     def _stub_move_back(self):
         self.set_motor_status("ok", "RUNNING")
         self.running_time.setText("0.95")  # demo seconds
+        print("Stub: Move Back clicked")
+
+    def _stub_move_stop(self):
+        self.set_motor_status("off", "STOPPED")
+        print("Stub: Stop clicked") 
 
 
 # -----------------------------
@@ -410,12 +428,37 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.statusBar().showMessage("Ready")
 
+def timer_thread(w: MainWindow):
+    counter:int = 0
+    while True:
+        QtCore.QThread.msleep(1000)
+        # Here you could update status lamps or other periodic tasks.
+        counter += 1
+        w.motor_panel.running_time.setText(f"{counter}")
+        if counter % 5 == 0:
+            w.wp_panel.set_weight_value(10.0 * counter)
+
+        print(f"Timer thread tick: {counter} seconds, weight={10.0 * counter} kg ")
+        
 
 def main():
-    app = QtWidgets.QApplication(sys.argv)
-    app.setStyle("Fusion")
-    w = MainWindow()
-    w.show()
+    try:
+        
+        app = QtWidgets.QApplication(sys.argv)
+        print(f"Starting SCADA GUI application.... argv={sys.argv}")
+        app.setStyle("Fusion")
+        w = MainWindow()
+        w.show()
+        _timer_thread: threading.Thread = threading.Thread(target=timer_thread  , args=(w,), daemon=True)
+        _timer_thread.start()
+    except KeyboardInterrupt:
+        print("SCADA GUI application interrupted by user.")
+        sys.exit(0)
+
+    except Exception as ex:
+        print(f"ERROR starting SCADA GUI application. Exception: {ex} of type: {type(ex)}.")
+        sys.exit(1)
+
     sys.exit(app.exec())
 
 
