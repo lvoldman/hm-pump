@@ -76,6 +76,8 @@ class MotorPanel(QtWidgets.QGroupBox):
         self.pos.setFixedHeight(34)
 
         self.btn_move_abs = QtWidgets.QPushButton("Move Absolute")
+        self.btn_move_abs.setProperty("role", "primary")
+
         self.btn_move_abs.setMinimumWidth(150)
         self.btn_move_abs.setFixedHeight(40)
 
@@ -92,6 +94,11 @@ class MotorPanel(QtWidgets.QGroupBox):
         self.btn_back = QtWidgets.QPushButton("◀ Move Backward")
         self.btn_fwd = QtWidgets.QPushButton("Move Forward ▶")
         self.btn_stop = QtWidgets.QPushButton("■ STOP")
+
+        self.btn_fwd.setProperty("role", "primary")
+        self.btn_back.setProperty("role", "primary")
+        self.btn_stop.setProperty("role", "primary")
+
         
         self.btn_stop.setStyleSheet("QPushButton { background-color: #e74c3c; color: white; }")
         
@@ -275,6 +282,9 @@ class WeightPowerPanel(QtWidgets.QGroupBox):
         self.btn_recalc = QtWidgets.QPushButton("Recalculate")
         self.btn_recalc.setFixedHeight(40)
 
+        self.btn_zero.setProperty("role", "neutral")
+        self.btn_recalc.setProperty("role", "secondary")
+
         row_btn.addWidget(self.btn_zero)
         row_btn.addWidget(self.btn_recalc)
         row_btn.addStretch(1)
@@ -349,47 +359,205 @@ class MainWindow(QtWidgets.QMainWindow):
         # Unified sizes & SCADA-like clean look
         # (kept conservative; no fancy palette changes)
         self.setStyleSheet("""
-            QMainWindow { background: #f4f6f8; }
+/* ===== Base ===== */
+QMainWindow {
+    background: #eef1f4;
+}
+QWidget {
+    font-size: 12px;
+}
 
-            QGroupBox {
-                font-weight: 600;
-                border: 1px solid #c9ced6;
-                border-radius: 6px;
-                margin-top: 10px;
-                background: white;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 4px 0 4px;
-            }
+/* ===== Tabs ===== */
+QTabWidget::pane {
+    border: 1px solid #c7cdd6;
+    top: -1px;
+    background: #eef1f4;
+}
+QTabBar::tab {
+    background: #dfe5ec;
+    border: 1px solid #c7cdd6;
+    border-bottom: none;
+    padding: 8px 14px;
+    margin-right: 2px;
+    min-height: 22px;
+    font-weight: 600;
+}
+QTabBar::tab:selected {
+    background: #ffffff;
+}
+QTabBar::tab:hover {
+    background: #e7edf5;
+}
 
-            QLabel { font-size: 12px; }
-            QLineEdit, QDoubleSpinBox {
-                font-size: 12px;
-                padding: 4px 6px;
-            }
-            QPushButton {
-                font-size: 12px;
-                font-weight: 600;
-            }
-            QCheckBox { font-size: 12px; }
+/* ===== GroupBox ===== */
+QGroupBox {
+    background: #ffffff;
+    border: 1px solid #c7cdd6;
+    border-radius: 6px;
+    margin-top: 14px;
+    padding: 10px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 6px;
+    color: #2b2f36;
+}
 
-            /* Status lamp states */
-            #StatusLamp {
-                border-radius: 7px;
-                border: 1px solid #7a7a7a;
-                background: #bdbdbd; /* off default */
-            }
-            #StatusLamp[state="off"]  { background: #bdbdbd; }
-            #StatusLamp[state="ok"]   { background: #2ecc71; }
-            #StatusLamp[state="warn"] { background: #f1c40f; }
-            #StatusLamp[state="err"]  { background: #e74c3c; }
+/* ===== Labels ===== */
+QLabel {
+    color: #2b2f36;
+}
+QLabel#StatusText {
+    font-weight: 800;
+    color: #1f2630;
+}
 
-            QLabel#StatusText {
-                font-weight: 700;
-            }
-        """)
+/* ===== Inputs ===== */
+QLineEdit, QDoubleSpinBox {
+    background: #ffffff;
+    border: 1px solid #b9c0cb;
+    border-radius: 4px;
+    padding: 6px 8px;
+    selection-background-color: #9bb7df;
+}
+QLineEdit:read-only {
+    background: #f3f6fa;
+    color: #3a404b;
+}
+QLineEdit:disabled, QDoubleSpinBox:disabled {
+    background: #eef2f7;
+    color: #7a838f;
+    border: 1px solid #cfd6df;
+}
+
+/* Clear focus ring (SCADA-friendly) */
+QLineEdit:focus, QDoubleSpinBox:focus {
+    border: 2px solid #4c84c7;
+    padding: 5px 7px; /* compensate for thicker border */
+}
+
+/* Spinbox arrows (subtle) */
+QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
+    width: 18px;
+    border-left: 1px solid #d4d9e1;
+    background: #f7f9fc;
+}
+QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover {
+    background: #eef3fb;
+}
+
+/* ===== CheckBox ===== */
+QCheckBox {
+    spacing: 8px;
+}
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    border: 1px solid #9ea7b3;
+    background: #ffffff;
+}
+QCheckBox::indicator:checked {
+    background: #2d7bd6;
+    border: 1px solid #2b6dbf;
+}
+
+/* ===== Buttons base ===== */
+QPushButton {
+    background: #2d7bd6;
+    color: #ffffff;
+    border: 1px solid #2b6dbf;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-weight: 700;
+}
+QPushButton:hover { background: #3a88e2; }
+QPushButton:pressed { background: #2568b7; }
+QPushButton:disabled {
+    background: #b9c7d8;
+    border: 1px solid #aab7c7;
+    color: #f5f7fa;
+}
+
+/* ===== Role-based colors ===== */
+
+/* Primary (motion / main actions) */
+QPushButton[role="primary"] {
+    background: #1f6fd1;
+    border: 1px solid #1c5fb2;
+}
+QPushButton[role="primary"]:hover { background: #2a7be0; }
+QPushButton[role="primary"]:pressed { background: #1a5fb7; }
+
+/* Secondary (utility but important) */
+QPushButton[role="secondary"] {
+    background: #2f3a47;
+    border: 1px solid #25303b;
+}
+QPushButton[role="secondary"]:hover { background: #3a4756; }
+QPushButton[role="secondary"]:pressed { background: #25303b; }
+
+/* Neutral (safe / service, e.g. tare/zero) */
+QPushButton[role="neutral"] {
+    background: #e9edf3;
+    color: #1f2630;
+    border: 1px solid #b9c0cb;
+}
+QPushButton[role="neutral"]:hover { background: #dfe6ef; }
+QPushButton[role="neutral"]:pressed { background: #d2dae6; }
+
+/* Danger (future Stop/E-Stop) — already ready to use */
+QPushButton[role="danger"] {
+    background: #d64545;
+    border: 1px solid #b63737;
+}
+QPushButton[role="danger"]:hover { background: #e15353; }
+QPushButton[role="danger"]:pressed { background: #b63737; }
+
+/* ===== Scroll area ===== */
+QScrollArea {
+    border: none;
+    background: transparent;
+}
+QScrollBar:vertical {
+    background: transparent;
+    width: 12px;
+    margin: 2px;
+}
+QScrollBar::handle:vertical {
+    background: #c3c9d4;
+    border-radius: 6px;
+    min-height: 24px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #aeb6c3;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+/* ===== Status bar ===== */
+QStatusBar {
+    background: #dde4ee;
+    border-top: 1px solid #c7cdd6;
+    color: #2b2f36;
+}
+QStatusBar::item {
+    border: none;
+}
+
+/* ===== Status lamp ===== */
+#StatusLamp {
+    border-radius: 7px;
+    border: 1px solid #6e7683;
+    background: #bdbdbd; /* default */
+}
+#StatusLamp[state="off"]  { background: #bdbdbd; }
+#StatusLamp[state="ok"]   { background: #2ecc71; }
+#StatusLamp[state="warn"] { background: #f1c40f; }
+#StatusLamp[state="err"]  { background: #e74c3c; }
+""")
 
     def _build_ui(self):
         tabs = QtWidgets.QTabWidget()
