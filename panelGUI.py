@@ -237,6 +237,20 @@ class WeightPowerPanel(QtWidgets.QGroupBox):
     def _build_ui(self):
         self.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
 
+        self.resolution = QtWidgets.QDoubleSpinBox()
+        self.resolution.setDecimals(2)
+        self.resolution.setRange(0.10, 3600.0)
+        self.resolution.setSingleStep(0.10)
+        self.resolution.setValue(1.0)  # default: every 1 second
+        self.resolution.setFixedHeight(34)
+        self.resolution.setMinimumWidth(140)
+
+        controls = QtWidgets.QHBoxLayout()
+        controls.setSpacing(10)
+        controls.addWidget(QtWidgets.QLabel("Resolution (s):"))
+        controls.addWidget(self.resolution)
+        controls.addStretch(1)
+
         main = QtWidgets.QVBoxLayout(self)
         main.setContentsMargins(12, 12, 12, 12)
         main.setSpacing(10)
@@ -291,6 +305,7 @@ class WeightPowerPanel(QtWidgets.QGroupBox):
 
         main.addLayout(header)
         main.addLayout(form)
+        main.addLayout(controls)
         main.addLayout(row_btn)
 
         # initial status
@@ -347,6 +362,59 @@ class WeightPowerPanel(QtWidgets.QGroupBox):
         self.power.setText(f"{p:.6g}")
 
 
+"""
+GUI-only log tab:
+    - resolution field (seconds)
+    - read-only text log (timestamp, velocity, weight, power, etc.)
+"""
+class LogPanel(QtWidgets.QWidget):
+
+    resolutionChanged = QtCore.Signal(float)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._build_ui()
+        self._wire()
+
+    def _build_ui(self):
+        root = QtWidgets.QVBoxLayout(self)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(10)
+
+        controls = QtWidgets.QHBoxLayout()
+        controls.setSpacing(10)
+
+        self.resolution = QtWidgets.QDoubleSpinBox()
+        self.resolution.setDecimals(2)
+        self.resolution.setRange(0.10, 3600.0)
+        self.resolution.setSingleStep(0.10)
+        self.resolution.setValue(1.0)  # default: every 1 second
+        self.resolution.setFixedHeight(34)
+        self.resolution.setMinimumWidth(140)
+
+        controls.addWidget(QtWidgets.QLabel("Resolution (s):"))
+        controls.addWidget(self.resolution)
+        controls.addStretch(1)
+
+        self.log = QtWidgets.QPlainTextEdit()
+        self.log.setReadOnly(True)
+        self.log.setPlaceholderText("Log output...")
+        self.log.setLineWrapMode(QtWidgets.QPlainTextEdit.LineWrapMode.NoWrap)
+
+        root.addLayout(controls)
+        root.addWidget(self.log, 1)
+
+    def _wire(self):
+        self.resolution.valueChanged.connect(lambda v: self.resolutionChanged.emit(float(v)))
+
+    def append_line(self, line: str) -> None:
+        self.log.appendPlainText(line)
+        # keep view pinned to bottom
+        sb = self.log.verticalScrollBar()
+        sb.setValue(sb.maximum())
+
+
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -354,6 +422,46 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resize(1000, 650)
         self._apply_scada_style()
         self._build_ui()
+
+#  --- GUI-only periodic logging ---
+        self._log_timer = QtCore.QTimer(self)
+        self._log_timer.timeout.connect(self._append_log_sample)
+        self._log_timer.start(int(self.log_tab.resolution.value() * 1000))
+
+        self.log_tab.resolutionChanged.connect(self._on_log_resolution_changed)
+
+    def _on_log_resolution_changed(self, seconds: float) -> None:
+        ms = max(100, int(seconds * 1000))
+        self._log_timer.setInterval(ms)
+
+    def _append_log_sample(self) -> None:
+        # Log only when motor is running
+        motor_status = self.motor_panel.motor_status_text.text().strip().upper()
+        if motor_status != "RUNNING":
+            return
+        # Timestamp
+        ts = QtCore.QDateTime.currentDateTime().toString("yyyy-MM-dd HH:mm:ss.zzz")
+
+        # Values from existing GUI (GUI-only; later you will feed these from hardware)
+        vel = self.motor_panel.vel.value()
+        accel = self.motor_panel.accel.value()
+        pos = self.motor_panel.pos.value()
+
+        weight_txt = self.wp_panel.weight.text().strip()
+        power_txt = self.wp_panel.power.text().strip()
+
+        motor_status = self.motor_panel.motor_status_text.text().strip()
+        scale_status = self.wp_panel.scale_status_text.text().strip()
+
+        # Compose CSV-like line
+        line = (
+            f"{ts}, "
+            f"vel={vel:.4g}, accel={accel:.4g}, pos={pos:.4g}, "
+            f"weight={weight_txt or ''}, P={power_txt or ''}, "
+            f"motor={motor_status}, scale={scale_status}"
+        )
+        self.log_tab.append_line(line)
+
 
     def _apply_scada_style(self):
         # Unified sizes & SCADA-like clean look
@@ -546,7 +654,16 @@ QStatusBar {
 QStatusBar::item {
     border: none;
 }
-
+                           
+QPlainTextEdit {
+    background: #0f1720;
+    color: #d8e0ea;
+    border: 1px solid #2b3440;
+    border-radius: 6px;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px;
+    padding: 8px;
+}
 /* ===== Status lamp ===== */
 #StatusLamp {
     border-radius: 7px;
@@ -565,6 +682,9 @@ QStatusBar::item {
 
         tab = QtWidgets.QWidget()
         tabs.addTab(tab, "Main")
+
+        self.log_tab = LogPanel()
+        tabs.addTab(self.log_tab, "Log")
 
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
