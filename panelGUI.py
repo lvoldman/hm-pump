@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 import threading
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtWidgets, QtGui
 
 
 # -----------------------------
@@ -396,6 +396,27 @@ class LogPanel(QtWidgets.QWidget):
         controls.addWidget(self.resolution)
         controls.addStretch(1)
 
+        
+
+        #-------- 
+        self.max_lines = QtWidgets.QSpinBox()
+        self.max_lines.setRange(100, 1_000_000)
+        self.max_lines.setValue(5000)  # default
+        self.max_lines.setFixedHeight(34)
+        self.max_lines.setMinimumWidth(120)
+
+        self.btn_clear = QtWidgets.QPushButton("Clear")
+        self.btn_clear.setFixedHeight(34)
+        self.btn_clear.setProperty("role", "neutral")  # role-based QSS
+
+        controls.addSpacing(10)
+        controls.addWidget(QtWidgets.QLabel("Max size (lines):"))
+        controls.addWidget(self.max_lines)
+        controls.addSpacing(10)
+        controls.addWidget(self.btn_clear)
+
+        #-------- Log output area -------
+
         self.log = QtWidgets.QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setPlaceholderText("Log output...")
@@ -406,9 +427,23 @@ class LogPanel(QtWidgets.QWidget):
 
     def _wire(self):
         self.resolution.valueChanged.connect(lambda v: self.resolutionChanged.emit(float(v)))
+        self.btn_clear.clicked.connect(self.log.clear)
 
     def append_line(self, line: str) -> None:
         self.log.appendPlainText(line)
+
+        # Enforce max lines (drop oldest)
+        max_lines = int(self.max_lines.value())
+        doc = self.log.document()
+        extra = doc.blockCount() - max_lines
+        if extra > 0:
+            cursor = QtGui.QTextCursor(doc)
+            cursor.movePosition(QtGui.QTextCursor.MoveOperation.Start)
+            for _ in range(extra):
+                cursor.select(QtGui.QTextCursor.SelectionType.LineUnderCursor)
+                cursor.removeSelectedText()
+                cursor.deleteChar()  # remove newline
+
         # keep view pinned to bottom
         sb = self.log.verticalScrollBar()
         sb.setValue(sb.maximum())
