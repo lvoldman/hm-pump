@@ -10,26 +10,24 @@ from PySide6 import QtCore, QtWidgets, QtGui
 # Small SCADA-style status lamp
 # -----------------------------
 class StatusLamp(QtWidgets.QFrame):
-    """
-    Simple round indicator.
-    States: "off", "ok", "warn", "err"
-    """
+# Simple round indicator.
+# States: "off", "ok", "warn", "err"
     def __init__(self, parent=None, size: int = 14):
         super().__init__(parent)
         self._size = size
         self.setFixedSize(size, size)
-        self.setObjectName("StatusLamp")
-        self.set_state("off")
+        self.setObjectName("StatusLamp")  # for stylesheet
+        self.set_state("off")              # default state
 
     def set_state(self, state: str) -> None:
-        state = (state or "off").lower()
+        state = (state or "off").lower()                    # if none given then "off"
         if state not in {"off", "ok", "warn", "err"}:
             state = "off"
-        self.setProperty("state", state)
+        self.setProperty("state", state)                    # set dynamic property for stylesheet
         # re-polish so stylesheet applies immediately
-        self.style().unpolish(self)
-        self.style().polish(self)
-        self.update()
+        self.style().unpolish(self)                         # remove old style
+        self.style().polish(self)                           # apply new style
+        self.update()                                       # trigger repaint 
 
 
 # -----------------------------
@@ -147,6 +145,15 @@ class MotorPanel(QtWidgets.QGroupBox):
         row_time.addWidget(self.running_time)
         row_time.addStretch(1)
 
+
+        self.btn_reset_time = QtWidgets.QPushButton("Reset")
+        self.btn_reset_time.setFixedHeight(34)
+        self.btn_reset_time.setMinimumWidth(80)
+        self.btn_reset_time.setProperty("role", "neutral")
+
+        row_time.addWidget(self.btn_reset_time)
+        row_time.addStretch(1)
+        
         # ---- Timeout enable + timeout value
         row_to = QtWidgets.QHBoxLayout()
         row_to.setSpacing(10)
@@ -191,12 +198,20 @@ class MotorPanel(QtWidgets.QGroupBox):
         self.btn_fwd.clicked.connect(self._stub_move_fwd)
         self.btn_back.clicked.connect(self._stub_move_back)
         self.btn_stop.clicked.connect(self._stub_move_stop)
-
+        self.btn_reset_time.clicked.connect(self._reset_running_time)
+        
         # initial status
         self.set_motor_status("off", "OFF")
 
-        print(f'Starting watchdog thread for I/O control ')
+        # print(f'Starting watchdog thread for I/O control ')
 
+    
+    # reset running time display
+    def _reset_running_time(self):
+        # GUI-only reset; real motor code will override this later
+        self.running_time.setText("")
+        self.set_motor_status("off", "IDLE")
+    
     # ---- Status API (GUI-only for now) ----
     def set_motor_status(self, lamp_state: str, text: str) -> None:
         self.motor_lamp.set_state(lamp_state)
@@ -419,6 +434,7 @@ class LogPanel(QtWidgets.QWidget):
 
         self.log = QtWidgets.QPlainTextEdit()
         self.log.setReadOnly(True)
+        self.log.document().setMaximumBlockCount(5000)  # default
         self.log.setPlaceholderText("Log output...")
         self.log.setLineWrapMode(QtWidgets.QPlainTextEdit.LineWrapMode.NoWrap)
 
@@ -428,21 +444,12 @@ class LogPanel(QtWidgets.QWidget):
     def _wire(self):
         self.resolution.valueChanged.connect(lambda v: self.resolutionChanged.emit(float(v)))
         self.btn_clear.clicked.connect(self.log.clear)
+        self.max_lines.valueChanged.connect(
+            lambda v: self.log.document().setMaximumBlockCount(int(v))
+        )
 
     def append_line(self, line: str) -> None:
         self.log.appendPlainText(line)
-
-        # Enforce max lines (drop oldest)
-        max_lines = int(self.max_lines.value())
-        doc = self.log.document()
-        extra = doc.blockCount() - max_lines
-        if extra > 0:
-            cursor = QtGui.QTextCursor(doc)
-            cursor.movePosition(QtGui.QTextCursor.MoveOperation.Start)
-            for _ in range(extra):
-                cursor.select(QtGui.QTextCursor.SelectionType.LineUnderCursor)
-                cursor.removeSelectedText()
-                cursor.deleteChar()  # remove newline
 
         # keep view pinned to bottom
         sb = self.log.verticalScrollBar()
