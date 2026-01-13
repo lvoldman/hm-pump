@@ -51,6 +51,7 @@ class servoMotor:
         with self.__op_lock:
             self.__current_op = servoMotor.opType.go2pos   # Update current operation
         self._watch_dog_run(_parms.timeout)
+        return True
 
     def forward(self, _parms: servoParameters)->bool:
         try:
@@ -61,6 +62,7 @@ class servoMotor:
         with self.__op_lock:
             self.__current_op = servoMotor.opType.forward   # Update current operation
         self._watch_dog_run(_parms.timeout)
+        return True
     
     def backward(self, _parms: servoParameters)->bool:
         try:
@@ -71,10 +73,16 @@ class servoMotor:
         with self.__op_lock:
             self.__current_op = servoMotor.opType.backward   # Update current operation
         self._watch_dog_run(_parms.timeout)
+        return True
     
     def stop(self)->bool:                               # atomic stop operation (no watchdog)
         self.__wd_stop.set()                      # Signal watchdog thread to stop
- 
+        try:
+            # Unblock any waiters (best-effort)
+            self.devNotificationQ.put(False)
+        except Exception:
+            pass
+        return True
 
     def  _watch_dog_run(self, timeout:float=None)->threading.Thread:
         self.__start_time = time.time()                 # Record start time of operation
@@ -83,7 +91,7 @@ class servoMotor:
                                                         # Start watchdog thread
         self.__wd.start()   
         return self.__wd
-    
+        
     def __watch_dog_thread(self, timeout:float=None):
         print(f'Watch dog thread started')
         _status = True
