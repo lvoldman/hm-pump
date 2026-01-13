@@ -758,9 +758,9 @@ QPlainTextEdit {
 
         self.statusBar().showMessage("Ready")
 
-def timer_thread(w: MainWindow):
+def timer_thread(w: MainWindow, stop_event: threading.Event) -> None:
     counter:int = 0
-    while True:
+    while not stop_event.is_set():
         QtCore.QThread.msleep(1000)
         # Here you could update status lamps or other periodic tasks.
         counter += 1
@@ -773,13 +773,14 @@ def timer_thread(w: MainWindow):
 
 def main():
     try:
-        
+        _stop: threading.Event = threading.Event()
+        _stop.clear()
         app = QtWidgets.QApplication(sys.argv)
         print(f"Starting SCADA GUI application.... argv={sys.argv}")
         app.setStyle("Fusion")
         w = MainWindow()
         w.show()
-        _timer_thread: threading.Thread = threading.Thread(target=timer_thread  , args=(w,), daemon=True)
+        _timer_thread: threading.Thread = threading.Thread(target=timer_thread  , args=(w,_stop, ), daemon=True)
         _timer_thread.start()
     except KeyboardInterrupt:
         print("SCADA GUI application interrupted by user.")
@@ -788,8 +789,10 @@ def main():
     except Exception as ex:
         print(f"ERROR starting SCADA GUI application. Exception: {ex} of type: {type(ex)}.")
         sys.exit(1)
-
-    sys.exit(app.exec())
+    _exit_code = app.exec()
+    print(f"SCADA GUI application exited with code {_exit_code}.")
+    _stop.set()
+    sys.exit(_exit_code)
 
 
 if __name__ == "__main__":
