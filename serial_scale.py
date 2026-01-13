@@ -12,25 +12,25 @@ class serialScale:
         ports = serial.tools.list_ports.comports()
         for port in ports:
             if "Scale" in port.description:  # Replace with actual identifier for scales
-                serialScale._scales.append(port.device)
+                serialScale._scales.append(port.device)   # Add COM port to list
         return  serialScale._scales
     
-    def __init__(self, serial_number: str):
-        self.serial_number = serial_number
+    def __init__(self, serial_port: str, poll_interval: float = 0.1):
+        self.serial_port = serial_port
         self.connection = None
         self.__wd_stop:threading.Event = threading.Event() # Event to stop watchdog thread
+        self.__current_weight:float = 0.0                     # Current weight reading
+        self.__wd_stop.clear()
+        self.__poll_interval = poll_interval                # Polling interval for weight readings
     
     def connect(self)->bool:
         try:
-            ports = serial.tools.list_ports.comports()
-            for port in ports:
-                if port.serial_number == self.serial_number:
-                    self.connection = serial.Serial(port.device, baudrate=9600, timeout=1)
-                    return True
+            self.connection = serial.Serial(self.serial_port, baudrate=9600, timeout=1)
+        except Exception as ex:
+            print(f'serialScale.connect(): failed to open {self.serial_port}. ex={ex}')
+            self.connection = None
             return False
-        except Exception as e:
-            print(f'Error connecting to scale: {e}')
-            return False
+        return True
     
     def read_weight(self)->float:   
         try:
@@ -58,8 +58,13 @@ class serialScale:
         
         try:
             while not self.__wd_stop.is_set():
+                self.__current_weight = float(self.connection.readline().decode('utf-8').strip())   
                 pass                                # Monitor operation status
                                 
-                time.sleep(0.1)
+                time.sleep(self.__poll_interval)
         except Exception as e:
             print(f'Error in watch dog thread: {e}')
+
+    @property
+    def weight(self):
+        return self.__current_weight    

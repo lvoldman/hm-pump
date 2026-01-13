@@ -20,7 +20,7 @@ class servoMotor:
     opType = Enum("opType", ["forward", "backward", "go2pos", "stoped"])
 
     @staticmethod
-    def listMotords()->list[str]:       # List available servo motors SNs
+    def listMotors()->list[str]:       # List available servo motors SNs
         _motors = []
         pass                  # Implement logic to list available servo motors
         return  _motors

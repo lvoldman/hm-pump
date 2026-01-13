@@ -4,6 +4,8 @@ import sys
 import threading
 
 from PySide6 import QtCore, QtWidgets, QtGui
+from servo_motor import servoMotor, servoParameters
+from serial_scale  import serialScale
 
 
 # -----------------------------
@@ -40,6 +42,9 @@ class MotorPanel(QtWidgets.QGroupBox):
 
     def __init__(self, parent=None):
         super().__init__("Motor", parent)
+        self._run_timer = QtCore.QTimer(self)
+        self._run_timer.setInterval(100)  # 100 ms tick
+        self._t0 = None  # type: float | None
         self._build_ui()
         self._wire()
 
@@ -60,6 +65,18 @@ class MotorPanel(QtWidgets.QGroupBox):
         self.motor_status_text = QtWidgets.QLabel("OFF")
         self.motor_status_text.setObjectName("StatusText")
         header.addWidget(self.motor_status_text)
+
+        # Motor selector (SN)
+        header.addSpacing(16)
+        header.addWidget(QtWidgets.QLabel("Motor:"))
+
+        self.motor_select = QtWidgets.QComboBox()
+        self.motor_select.setMinimumWidth(220)
+        self.motor_select.setFixedHeight(34)
+        self.motor_select.addItem("— not selected —")
+        header.addWidget(self.motor_select)
+
+
         header.addStretch(1)
 
         # ---- Move absolute: position + button
@@ -199,45 +216,98 @@ class MotorPanel(QtWidgets.QGroupBox):
         self.btn_back.clicked.connect(self._stub_move_back)
         self.btn_stop.clicked.connect(self._stub_move_stop)
         self.btn_reset_time.clicked.connect(self._reset_running_time)
+        self.motor_select.currentTextChanged.connect(self._on_motor_selected)
         
         # initial status
         self.set_motor_status("off", "OFF")
 
-        # print(f'Starting watchdog thread for I/O control ')
+        self._run_timer.timeout.connect(self._on_run_tick)
 
     
     # reset running time display
     def _reset_running_time(self):
         # GUI-only reset; real motor code will override this later
         self.running_time.setText("")
+        self._reset_running_time_value()
         self.set_motor_status("off", "IDLE")
     
     # ---- Status API (GUI-only for now) ----
     def set_motor_status(self, lamp_state: str, text: str) -> None:
         self.motor_lamp.set_state(lamp_state)
         self.motor_status_text.setText(text)
+         # running time ticks ONLY when RUNNING
+        if text.strip().upper() == "RUNNING":
+            self._start_running_time()
+        else:
+            self._stop_running_time()
         print(f"Motor status set to: {lamp_state} / {text}")
 
     # ---- GUI-only stubs ----
     def _stub_move_abs(self):
         self.set_motor_status("ok", "RUNNING")
-        self.running_time.setText("1.23")  # demo seconds
         print("Stub: Move Absolute clicked")
 
     def _stub_move_fwd(self):
         self.set_motor_status("ok", "RUNNING")
-        self.running_time.setText("0.80")  # demo seconds
         print("Stub: Move Forward clicked")
 
     def _stub_move_back(self):
         self.set_motor_status("ok", "RUNNING")
-        self.running_time.setText("0.95")  # demo seconds
         print("Stub: Move Back clicked")
 
     def _stub_move_stop(self):
         self.set_motor_status("off", "STOPPED")
         print("Stub: Stop clicked") 
 
+    def set_motor_list(self, sns: list[str]) -> None:
+        """Call this later with servoMotor.listMotors()->list[str]."""
+        cur = self.motor_select.currentText()
+        self.motor_select.blockSignals(True)
+        self.motor_select.clear()
+        self.motor_select.addItem("— not selected —")
+        for sn in sns:
+            self.motor_select.addItem(sn)
+        # try keep selection if still exists
+        idx = self.motor_select.findText(cur)
+        self.motor_select.setCurrentIndex(idx if idx >= 0 else 0)
+        self.motor_select.blockSignals(False)
+
+    def _on_motor_selected(self, sn: str) -> None:
+        # GUI-only for now
+        if sn and "not selected" not in sn:
+            self.set_motor_status("warn", f"SELECTED {sn}")
+        else:
+            self.set_motor_status("off", "OFF")
+
+    def _start_running_time(self):
+        # start stopwatch only if not already running
+        if self._t0 is None:
+            self._t0 = QtCore.QElapsedTimer()
+            self._t0.start()
+        if not self._run_timer.isActive():
+            self._run_timer.start()
+
+    def _stop_running_time(self):
+        if self._run_timer.isActive():
+            self._run_timer.stop()
+
+    def _reset_running_time_value(self):
+        self._stop_running_time()
+        self._t0 = None
+        self.running_time.setText("")  # or "0"
+
+# ---- Timer tick for running time update ----
+    def _on_run_tick(self):
+        # update field only while motor status is RUNNING
+        if self.motor_status_text.text().strip().upper() != "RUNNING":
+            self._stop_running_time()
+            return
+
+        if self._t0 is None:
+            return
+        ms = self._t0.elapsed()
+        sec = ms / 1000.0
+        self.running_time.setText(f"{sec:.2f}")
 
 # -----------------------------
 # Weight & Power (GUI only)
@@ -252,18 +322,19 @@ class WeightPowerPanel(QtWidgets.QGroupBox):
     def _build_ui(self):
         self.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
 
-        self.resolution = QtWidgets.QDoubleSpinBox()
-        self.resolution.setDecimals(2)
-        self.resolution.setRange(0.10, 3600.0)
-        self.resolution.setSingleStep(0.10)
-        self.resolution.setValue(1.0)  # default: every 1 second
-        self.resolution.setFixedHeight(34)
-        self.resolution.setMinimumWidth(140)
+        self.poll_interval = QtWidgets.QDoubleSpinBox()
+        self.poll_interval.setDecimals(2)
+        self.poll_interval.setRange(0.10, 3600.0)
+        self.poll_interval.setSingleStep(0.10)
+        self.poll_interval.setValue(1.0)  # default: every 1 second
+        self.poll_interval.setFixedHeight(34)
+        self.poll_interval.setMinimumWidth(140)
+        self.poll_interval.setToolTip("Interval between weight readings from the scale (seconds).")
 
         controls = QtWidgets.QHBoxLayout()
         controls.setSpacing(10)
-        controls.addWidget(QtWidgets.QLabel("Resolution (s):"))
-        controls.addWidget(self.resolution)
+        controls.addWidget(QtWidgets.QLabel("Poll interval (s):"))
+        controls.addWidget(self.poll_interval)
         controls.addStretch(1)
 
         main = QtWidgets.QVBoxLayout(self)
@@ -280,6 +351,18 @@ class WeightPowerPanel(QtWidgets.QGroupBox):
         self.scale_status_text = QtWidgets.QLabel("DISCONNECTED")
         self.scale_status_text.setObjectName("StatusText")
         header.addWidget(self.scale_status_text)
+
+
+        # Scale selector (serial port)
+        header.addSpacing(16)
+        header.addWidget(QtWidgets.QLabel("Port:"))
+
+        self.scale_select = QtWidgets.QComboBox()
+        self.scale_select.setMinimumWidth(220)
+        self.scale_select.setFixedHeight(34)
+        self.scale_select.addItem("— not selected —")
+        header.addWidget(self.scale_select)
+
         header.addStretch(1)
 
         form = QtWidgets.QFormLayout()
@@ -334,6 +417,9 @@ class WeightPowerPanel(QtWidgets.QGroupBox):
         # recalc power automatically.
         self.weight.textChanged.connect(self._recalc)
 
+        self.scale_select.currentTextChanged.connect(self._on_scale_selected)
+
+
     # ---- External update API (for later integration) ----
     def set_scale_status(self, lamp_state: str, text: str) -> None:
         self.scale_lamp.set_state(lamp_state)
@@ -375,6 +461,25 @@ class WeightPowerPanel(QtWidgets.QGroupBox):
 
         p = w / t
         self.power.setText(f"{p:.6g}")
+
+    def set_scale_list(self, ports: list[str]) -> None:
+        """Call this later with serialScale.listScales()->list[str]."""
+        cur = self.scale_select.currentText()
+        self.scale_select.blockSignals(True)
+        self.scale_select.clear()
+        self.scale_select.addItem("— not selected —")
+        for p in ports:
+            self.scale_select.addItem(p)
+        idx = self.scale_select.findText(cur)
+        self.scale_select.setCurrentIndex(idx if idx >= 0 else 0)
+        self.scale_select.blockSignals(False)
+
+    def _on_scale_selected(self, port: str) -> None:
+        # GUI-only for now
+        if port and "not selected" not in port:
+            self.set_scale_status("warn", f"SELECTED {port}")
+        else:
+            self.set_scale_status("off", "DISCONNECTED")
 
 
 """
@@ -471,6 +576,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._log_timer.start(int(self.log_tab.resolution.value() * 1000))
 
         self.log_tab.resolutionChanged.connect(self._on_log_resolution_changed)
+
+        self.motor_panel.set_motor_list(servoMotor.listMotors())
+        self.wp_panel.set_scale_list(serialScale.listScales())
 
     def _on_log_resolution_changed(self, seconds: float) -> None:
         ms = max(100, int(seconds * 1000))
@@ -570,6 +678,16 @@ QLineEdit, QDoubleSpinBox {
     border-radius: 4px;
     padding: 6px 8px;
     selection-background-color: #9bb7df;
+}
+                           QComboBox {
+    background: #ffffff;
+    border: 1px solid #b9c0cb;
+    border-radius: 4px;
+    padding: 6px 8px;
+}
+QComboBox:focus {
+    border: 2px solid #4c84c7;
+    padding: 5px 7px;
 }
 QLineEdit:read-only {
     background: #f3f6fa;
@@ -758,17 +876,17 @@ QPlainTextEdit {
 
         self.statusBar().showMessage("Ready")
 
-def timer_thread(w: MainWindow, stop_event: threading.Event) -> None:
-    counter:int = 0
-    while not stop_event.is_set():
-        QtCore.QThread.msleep(1000)
-        # Here you could update status lamps or other periodic tasks.
-        counter += 1
-        w.motor_panel.running_time.setText(f"{counter}")
-        if counter % 5 == 0:
-            w.wp_panel.set_weight_value(10.0 * counter)
+# def timer_thread(w: MainWindow, stop_event: threading.Event) -> None:
+#     counter:int = 0
+#     while not stop_event.is_set():
+#         QtCore.QThread.msleep(1000)
+#         # Here you could update status lamps or other periodic tasks.
+#         counter += 1
+#         w.motor_panel.running_time.setText(f"{counter}")
+#         if counter % 5 == 0:
+#             w.wp_panel.set_weight_value(10.0 * counter)
 
-        print(f"Timer thread tick: {counter} seconds, weight={10.0 * counter} kg ")
+#         print(f"Timer thread tick: {counter} seconds, weight={10.0 * counter} kg ")
         
 
 def main():
@@ -780,8 +898,8 @@ def main():
         app.setStyle("Fusion")
         w = MainWindow()
         w.show()
-        _timer_thread: threading.Thread = threading.Thread(target=timer_thread  , args=(w,_stop, ), daemon=True)
-        _timer_thread.start()
+        # _timer_thread: threading.Thread = threading.Thread(target=timer_thread  , args=(w,_stop, ), daemon=True)
+        # _timer_thread.start()
     except KeyboardInterrupt:
         print("SCADA GUI application interrupted by user.")
         sys.exit(0)
