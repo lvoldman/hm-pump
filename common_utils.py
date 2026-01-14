@@ -5,7 +5,7 @@ import logging, datetime, sys, os, re
 from dataclasses import dataclass
 from queue import Queue 
 from collections import namedtuple
-import unicodedata, unidecode, struct
+import  unidecode, struct
 uTranslate = lambda _str: logging.debug(unidecode.unidecode(_str))
 
 

@@ -25,7 +25,7 @@ class servoMotor:
         pass                  # Implement logic to list available servo motors
         return  _motors
     
-    def __init__(self, serial_number:str):
+    def __init__(self):
         self.devNotificationQ:Queue = Queue()           # Queue for notifications from watchdog thread 
                                                         # when opeartion completes
         self.__wd:threading.Thread = None                  # Watchdog thread
@@ -34,7 +34,6 @@ class servoMotor:
         self.__current_op:servoMotor.opType = servoMotor.opType.stoped          # Current operation
         self.__op_lock:threading.Lock = threading.Lock()  # Lock for current operation
         self.__start_time:float = 0.0                     # Start time of current operation
-        self.serial_number = serial_number                # Serial number of the servo motor
         self.__wd_stop.clear()
 
 
@@ -52,7 +51,6 @@ class servoMotor:
         with self.__op_lock:
             self.__current_op = servoMotor.opType.go2pos   # Update current operation
         self._watch_dog_run(_parms.timeout)
-        return True
 
     def forward(self, _parms: servoParameters)->bool:
         try:
@@ -63,7 +61,6 @@ class servoMotor:
         with self.__op_lock:
             self.__current_op = servoMotor.opType.forward   # Update current operation
         self._watch_dog_run(_parms.timeout)
-        return True
     
     def backward(self, _parms: servoParameters)->bool:
         try:
@@ -74,16 +71,10 @@ class servoMotor:
         with self.__op_lock:
             self.__current_op = servoMotor.opType.backward   # Update current operation
         self._watch_dog_run(_parms.timeout)
-        return True
     
     def stop(self)->bool:                               # atomic stop operation (no watchdog)
         self.__wd_stop.set()                      # Signal watchdog thread to stop
-        try:
-            # Unblock any waiters (best-effort)
-            self.devNotificationQ.put(False)
-        except Exception:
-            pass
-        return True
+ 
 
     def  _watch_dog_run(self, timeout:float=None)->threading.Thread:
         self.__start_time = time.time()                 # Record start time of operation
@@ -92,7 +83,7 @@ class servoMotor:
                                                         # Start watchdog thread
         self.__wd.start()   
         return self.__wd
-        
+    
     def __watch_dog_thread(self, timeout:float=None):
         print(f'Watch dog thread started')
         _status = True
