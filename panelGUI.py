@@ -326,8 +326,10 @@ class ScaleWorker(QtCore.QObject):
         try:
             if not self._scale:
                 return
-            w = self._scale.read_weight()
+            # w = self._scale.read_weight()
+            w = self._scale.weight if self._scale else 0.0              # get weight from property
             self.telemetryChanged.emit({"weight": w, "scale_port": self._port})
+            self._restart_timer()                                       # for next poll   
         except Exception as ex:
             self.error.emit(f"Scale poll error: {ex}")
 
@@ -839,12 +841,12 @@ class WeightPowerPanel(QtWidgets.QGroupBox):
         else:
             self.set_scale_status("off", "DISCONNECTED")
 
-    @QtCore.Slot(dict)
-    def on_scale_telemetry(self, t: dict) -> None:
-        if not t:
-            return
-        if "weight" in t:
-            self.set_weight_value(float(t["weight"]))
+    # @QtCore.Slot(dict)
+    # def on_scale_telemetry(self, t: dict) -> None:
+    #     if not t:
+    #         return
+    #     if "weight" in t:
+    #         self.set_weight_value(float(t["weight"]))
 
 
 """
