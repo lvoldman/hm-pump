@@ -205,36 +205,29 @@ class MAXON_Motor:
         self.keyHandle = None                                  # Open device Handle
         self.mDev_port:str = mxnDev.port                          # USB1,USB2, USB3 for USB..
         self.mDev_nodeID:int = mxnDev.nodeid                            # 1,2,3..
-        self.mDev_type = None                                 # devise type (DevType.ROTATOR / DevType.GRIPPERv3 / DevType.DIST_ROTATOR / DevType.TIME_ROTATOR (SPINNER))
         self.mDev_pos:int = 0                                 #  current position 
         self.el_current_limit:int = 0                       # electrical current limit to stop 
-        self.el_current_on_the_fly:int = 0                  # On-the-fly current                    
         self.wd = None                                      # watch dog identificator
-        self.__qStopDec:int = None                            # Quick stop decaliration 
         self.mDev_SN = mxnDev.sn                                   # Serial N (0x1018:0x04)
         self.mDev_status = False                              # device status (bool) / used for succesful initiation validation
-        self.mDev_in_motion = False                           # is device in motion
+        self.__stop_motion:threading.Event = threading.Event()  # Event to stop motion thread
         self.possition_control_mode = False                 # TRUE - control possition, FALSE - don't
         self.time_control_mode = False                      # TRUE - time control
-        self.mDev_pressed = False                             # is motion button pressed
-        self.gripper_onof = True                            # True means off )))
         self.new_pos = 0
         self.sensorType = mxnDev.sensortype
 #------- Bad practice --------
-        self.el_voltage:int = self.DEAFULT_VELOCITY_EV_VOLTAGE       # forCOMPATABILTY ONLY (BUGBUG)
         self.rpm:int = self.DevOpSPEED 
 #------- Bad practice --------
 #############  Communication ##########
-        self.__keyHandle = None
-        self.__nodeID = None
+        self.__keyHandle = None                         # store for not allocating new handle on each cmd
+        self.__nodeID = None                            # store for not allocating new handle on each cmd   
 #######################################        
         self.start_time: float = 0                                   # Start thread time
         self.success_flag = True                            # end of op flag
         self.rotationTime:float = 0                               # rotation time
-        self.diameter = MAXON_Motor.DIAMETER
-        self.gear = MAXON_Motor.GEAR
+        self.diameter = self.DIAMETER
+        self.gear = self.GEAR
         self.devName:str = mxnDev.sn
-        self.__title = None
         self.dev_lock = Lock()
         self.devNotificationQ = Queue()
 
@@ -258,14 +251,13 @@ class MAXON_Motor:
             self.mDev_get_cur_pos()
 
 
-            print_inf(f'({devName}) Serial number = {self.mDev_SN} Possition = {self.mDev_pos}')
-            # self._set_QuickStopPolarity(False)
+            print_inf(f'({self.devName}) Serial number = {self.mDev_SN} Possition = {self.mDev_pos}')
 
         except Exception as ex:
 
             e_type, e_filename, e_line_number, e_message = exptTrace(ex)
    
-            print_err(f"({devName}) ERROR. Initiating MAXON port {self.mDev_port} was lost. Unexpected Exception: {ex}")
+            print_err(f"({self.devName}) ERROR. Initiating MAXON port {self.mDev_port} was lost. Unexpected Exception: {ex}")
             return                                  # no valid FAULHABBER motor can be added
         
         else:
@@ -273,7 +265,7 @@ class MAXON_Motor:
             pass
 
         if self.mDev_port in MAXON_Motor.activated_devs:
-            print_err(f"**ERROR** . ({devName}) Device with port = {self.mDev_port} already activated")
+            print_err(f"**ERROR** . ({self.devName}) Device with port = {self.mDev_port} already activated")
         else:
             MAXON_Motor.activated_devs.append(self.mDev_port)
         
@@ -287,7 +279,7 @@ class MAXON_Motor:
 
         print_inf(f'Releasing/deleting MAXON on port {self.mDev_port}')  
 
-        self.mDev_in_motion = False
+        self.__stop_motion.set()    
 
         try:
 
@@ -734,101 +726,10 @@ class MAXON_Motor:
         return True
 
 
-    def _set_QuickStopPolarity(self, high = True):
-        print_inf(f'Setting active polarity on Digital Input 4 for {self.mDev_type} type on port {self.mDev_port} to {"HIGHT" if high else "LOW"}')
-        try:
-            _mask_polarity = MAXON_Motor.MXN_cmd(self.mDev_port, READ_HIGH_POLARITY, keyHandle=self.__keyHandle, nodeID=self.__nodeID, lock = MAXON_Motor.mxn_lock)
-            if len(_mask_polarity) > 0:
-                _mask:int = _mask_polarity[0].answData
-            else: 
-                print_err(f'Error reading polarity on Digital Input 4 for {self.mDev_type} type on port {self.mDev_port}')
-                return False        
-
-            _bit_mask = (0b0000000000000001 << (DIG_INP_4_CONF-1))
-            if high:
-                if (_mask >> _bit_mask) & 0b0000000000000001 == 0:
-                    print_log(f'Setting quickstop on chan {DIG_INP_4_CONF} polarity to HIGH')
-                    _mask = _mask | _bit_mask
-                else:
-                    print_log(f'Quickstop polarity on chan {DIG_INP_4_CONF} already HIGH')
-
-            else: 
-                if (_mask >> _bit_mask) & 0b0000000000000001 == 0:
-                    print_log(f'Setting quickstop polarity on chan {DIG_INP_4_CONF} to LOW')
-                    _mask = _mask & ~_bit_mask
-                else:
-                    print_log(f'Quickstop polarity on chan {DIG_INP_4_CONF} already LOW')                    
-            
-            MAXON_Motor.MXN_cmd(self.mDev_port, [(INP_POLARITY_CTL, 0x2, _mask, 0x2)], keyHandle=self.__keyHandle, nodeID=self.__nodeID, lock = MAXON_Motor.mxn_lock)
-
-            
-        except Exception as ex:
-            e_type, e_filename, e_line_number, e_message = exptTrace(ex)
-            print_err(f'MAXON Quick Stop setting on port {self.mDev_port} failed. Exception: {ex} of type: {type(ex)}.')
-            return False
-
-        return True
-
-    def _activateQuickStop(self) -> bool:
-        pErrorCode = c_uint()
-        print_inf(f'Activation Quick Stop on Digital Input 4 for {self.mDev_type} type on port {self.mDev_port}')
-        # try:
-
-        #     MAXON_Motor.epos.VCS_DigitalInputConfiguration(c_void_p(self.keyHandle) , c_uint16(self.mDev_nodeID), \
-        #                                   4,    # DigitalInputNb
-        #                                   5,    # Quick stop / DIC_QUICK_STOP
-        #                                   1,    # Mask  1: Functionality state will be displayed / 0: not displayed (not supported with EPOS4) 
-        #                                   0,    # Polarity, 1: Low active / 0: High active
-        #                                   0 ,   # ExecutionMask, 1: Set the error routine / Only for positive and negative
-        #                                   pErrorCode)
-        #     if pErrorCode.value != 0:
-        #             print_log(f'ERROR setting Digital Input. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-        #             # raise Exception(f'ERROR setting Digital Input. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-
-        try:
-            MAXON_Motor.MXN_cmd(self.mDev_port, ACTIVATE_QUICK_STOP, keyHandle=self.__keyHandle, nodeID=self.__nodeID,lock = MAXON_Motor.mxn_lock)
-
-
-        except Exception as ex:
-            e_type, e_filename, e_line_number, e_message = exptTrace(ex)
-            print_err(f'MAXON Quick Stop setting on port {self.mDev_port} failed. Exception: {ex} of type: {type(ex)}.')
-            return False
-
-        return True
-
-    def _deActivateQuickStop(self) -> bool:
-        pErrorCode = c_uint()
-        print_inf(f'Deactivation Quick Stop on Digital Input 4 for {self.mDev_type} type on port {self.mDev_port}')
-        # try:
-
-        #     MAXON_Motor.epos.VCS_DigitalInputConfiguration(c_void_p(self.keyHandle) , c_uint16(self.mDev_nodeID), \
-        #                                   4,    # DigitalInputNb
-        #                                   12,   # General purpose D / DIC_GENERAL_PURPOSE_D
-        #                                   1,    # Mask  1: Functionality state will be displayed / 0: not displayed (not supported with EPOS4) 
-        #                                   0,    # Polarity, 1: Low active / 0: High active
-        #                                   0 ,   # ExecutionMask, 1: Set the error routine / Only for positive and negative
-        #                                   pErrorCode)
-            
-        #     if pErrorCode.value != 0:
-        #             print_log(f'ERROR setting Digital Input. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-        #             # raise Exception(f'ERROR setting Digital Input. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-
-        try:
-            MAXON_Motor.MXN_cmd(self.mDev_port, DEACTIVATE_QUICK_STOP, keyHandle=self.__keyHandle, nodeID=self.__nodeID, lock = MAXON_Motor.mxn_lock)
-
-        except Exception as ex:
-            e_type, e_filename, e_line_number, e_message = exptTrace(ex)
-            print_err(f'MAXON deactivating Quick Stop setting on port {self.mDev_port} failed. Exception: {ex} of type: {type(ex)}.')
-            return False
-
-        return True
-
-
-    def init_dev(self, type) -> bool:
+    def init_dev(self) -> bool:
         
-        self.mDev_type = type
         pErrorCode = c_uint()
-        print_inf(f'Clearing  MAXON devise of {self.mDev_type} type on port {self.mDev_port}')
+        print_inf(f'Clearing  MAXON devise on port {self.mDev_port}')
         try:
             MAXON_Motor.epos.VCS_ClearFault(c_void_p(self.keyHandle) , c_uint16(self.mDev_nodeID), byref(pErrorCode))
             if pErrorCode.value != 0:
@@ -845,15 +746,54 @@ class MAXON_Motor:
             return False
 
         return True
+    def mDev_get_actual_current(self) -> int:
+        pCurrentIs = c_int32(0)
+        pErrorCode = c_uint()
 
+        MAXON_Motor.epos.VCS_GetCurrentIs(self.keyHandle, self.mDev_nodeID, byref(pCurrentIs), byref(pErrorCode))
+        actualCurrentValue:int = s16(pCurrentIs.value)
+
+        if pErrorCode.value != 0:
+            print_err(f'Getting Actual Current Value on port  {self.mDev_port} failed. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)} ')
+            return -1
+        else:
+            return actualCurrentValue
+        
+
+    def _is_pos_reached(self, target_pos:int, ex_limit:int) -> bool:
+        pErrorCode = c_uint()
+        pTargetReached = c_bool(False)
+        try:
+            MAXON_Motor.epos.VCS_GetMovementState(self.keyHandle, self.mDev_nodeID, byref(pTargetReached), byref(pErrorCode))
+
+            print_DEBUG(f'MAXON: POSITION REACHED (bit 10 at statusword  )={pTargetReached.value}')
+            if pErrorCode.value == 0:
+
+
+                if pTargetReached.value:        # Position reached - bit 10 at statusword 
+                    print_inf(f'POSITION REACHED on  MAXON port {self.mDev_port}. Exiting watchdog')
+
+                    return True
+            else:
+                print_err(f'MAXON failed read POSITION REACHED status on port = {self.mDev_port}. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
+        except Exception as ex:
+            e_type, e_filename, e_line_number, e_message = exptTrace(ex)
+            print_err(f'Exception: {ex} of type: {type(ex)} on checking POSITION REACHED status for port {self.mDev_port}.')
+        return False
+    
+
+    
+        
     def  mDev_watch_dog_thread(self):
         
         print_inf (f'>>> WatchDog MAXON  started on  port = {self.mDev_port}, dev = {self.devName}, position = {self.mDev_pos}')
         time.sleep(self.MEASUREMENT_DELAY)                 # waif for a half of sec
         self.success_flag = True
-        self.mDev_in_motion = True
+        self.__stop_motion.clear()              # reset stop event
+        self.start_time = time.time()   
+
         max_GRC:int = 0
-        while (self.mDev_in_motion):
+        while (not self.__stop_motion.is_set()):
             try:
                 pCurrentIs = c_int32(0)
                 pErrorCode = c_uint()
@@ -863,19 +803,10 @@ class MAXON_Motor:
                 pVelocityIs = c_long()
 
 #------------------------
-                MAXON_Motor.epos.VCS_GetCurrentIs(self.keyHandle, self.mDev_nodeID, byref(pCurrentIs), byref(pErrorCode))
-                actualCurrentValue:int = s16(pCurrentIs.value)
+                # MAXON_Motor.epos.VCS_GetCurrentIs(self.keyHandle, self.mDev_nodeID, byref(pCurrentIs), byref(pErrorCode))
+                # actualCurrentValue:int = s16(pCurrentIs.value)
+                actualCurrentValue:int = self.mDev_get_actual_current()
 #------------------------
-                # answA = MAXON_Motor.MXN_cmd(self.mDev_port, [MAXON_CURRENT_ACTUAL_VALUE_QUERY], keyHandle=self.__keyHandle, nodeID=self.__nodeID, lock=MAXON_Motor.mxn_lock)
-                # if len(answA) == 0:
-                #     print_err(f'WatchDog MAXON failed read MAXON_CURRENT_ACTUAL_VALUE_QUERY on port  {self.mDev_port}.')
-                #     continue
-
-                # actualCurrentValue:int = s32(answA[0].answData)
-
-#------------------------
-
-                self.el_current_on_the_fly = actualCurrentValue
 
                 print_DEBUG(f'WatchDog MAXHON Actual Current Value = {actualCurrentValue}')
                 if pErrorCode.value == 0:
@@ -884,11 +815,10 @@ class MAXON_Motor:
 
                     if (int(abs(actualCurrentValue)) > int(self.el_current_limit)):
                         print_inf(f' WatchDog MAXON: Actual Current Value = {actualCurrentValue}, Limit = {self.el_current_limit}')
-                        if (self.mDev_type == DevType.TROLLEY or self.mDev_type == DevType.DIST_ROTATOR) and self.possition_control_mode:
-                            _pos = self.mDev_get_cur_pos()
-                            if abs(_pos - self.new_pos) > self.EX_LIMIT:
-                                print_log(f'Desired position [{self.new_pos}] is not reached. Current position = {_pos}')
-                                self.success_flag = False
+                        _pos = self.mDev_get_cur_pos()
+                        if abs(_pos - self.new_pos) > self.EX_LIMIT:
+                            print_log(f'Desired position [{self.new_pos}] is not reached. Current position = {_pos}')
+                            self.success_flag = False
                         break
 
 
@@ -897,11 +827,6 @@ class MAXON_Motor:
 
 
                 
-                if self.mDev_type == DevType.GRIPPERv3:
-                    end_time = time.time()
-                    if end_time - self.start_time > self.GRIPPER_TIMEOUT:
-                        print_inf(f' WatchDog MAXON: GRIPPER operation canceled by timeout, port = {self.mDev_port}, actual current value = {actualCurrentValue}, Limit = {self.el_current_limit}, max GRC = {max_GRC} ')
-                        break
 
                 if self.time_control_mode:
                     end_time = time.time()
@@ -909,63 +834,55 @@ class MAXON_Motor:
                         print_inf(f' WatchDog MAXON: TIME/DIST ROTATOR operation completed, port = {self.mDev_port}, actual current value = {actualCurrentValue}, Limit = {self.el_current_limit}, max GRC = {max_GRC} ')
                         break
 
-                if (self.mDev_type == DevType.TROLLEY or self.mDev_type == DevType.DIST_ROTATOR) :
+               
+                MAXON_Motor.epos.VCS_GetQuickStopState(self.keyHandle, self.mDev_nodeID, byref(pQuickStop), byref(pErrorCode))
 
-
-                    MAXON_Motor.epos.VCS_GetQuickStopState(self.keyHandle, self.mDev_nodeID, byref(pQuickStop), byref(pErrorCode))
-
-                    print_DEBUG(f'WatchDog MAXON: QuickStop status ={pQuickStop.value}')
-                    if pErrorCode.value == 0:
-                        _status:int = 0
-                        _qStop:bool =  False
+                print_DEBUG(f'WatchDog MAXON: QuickStop status ={pQuickStop.value}')
+                if pErrorCode.value == 0:
+                    _status:int = 0
+                    _qStop:bool =  False
 
 ############
-                        _statusWord = MAXON_Motor.MXN_cmd(self.mDev_port, [STATUS_WORD_QUERY], keyHandle=self.__keyHandle, nodeID=self.__nodeID, lock=MAXON_Motor.mxn_lock)
-                        if len(_statusWord) > 0:
-                            _status  = _statusWord[0].answData
-                            # _qStop:bool = bool(_status & 0x10)
-                            _qStop = ((_status & 0x0f) == 0b0111) and (((_status >> 5) & 0x03) == 0b00) 
-                                                                # quick stop : xxxx xxxx x00x 0111
-                        
-                        if not (_qStop == bool(pQuickStop.value)):
-                            print_err(f'WARNING!!!! _qStop = {_qStop}(status =  0x{_status}:02x <> {num2binstr(_status)}) //  pQuickStop.value = { pQuickStop.value} ')
+                    _statusWord = MAXON_Motor.MXN_cmd(self.mDev_port, [STATUS_WORD_QUERY], keyHandle=self.__keyHandle, nodeID=self.__nodeID, lock=MAXON_Motor.mxn_lock)
+                    if len(_statusWord) > 0:
+                        _status  = _statusWord[0].answData
+                        # _qStop:bool = bool(_status & 0x10)
+                        _qStop = ((_status & 0x0f) == 0b0111) and (((_status >> 5) & 0x03) == 0b00) 
+                                                            # quick stop : xxxx xxxx x00x 0111
+                    
+                    if not (_qStop == bool(pQuickStop.value)):
+                        print_err(f'WARNING!!!! _qStop = {_qStop}(status =  0x{_status}:02x <> {num2binstr(_status)}) //  pQuickStop.value = { pQuickStop.value} ')
 
-                        MAXON_Motor.epos.VCS_GetVelocityIs(self.keyHandle, self.mDev_nodeID, byref(pVelocityIs), byref(pErrorCode))
+                    MAXON_Motor.epos.VCS_GetVelocityIs(self.keyHandle, self.mDev_nodeID, byref(pVelocityIs), byref(pErrorCode))
 
-                        MAXON_Motor.epos.VCS_GetState(self.keyHandle, self.mDev_nodeID, byref(pState), byref(pErrorCode))
-                        _qStop_state:bool = (pState.value == 0x0002)                 # QuickStop state
+                    MAXON_Motor.epos.VCS_GetState(self.keyHandle, self.mDev_nodeID, byref(pState), byref(pErrorCode))
+                    _qStop_state:bool = (pState.value == 0x0002)                 # QuickStop state
 ###########                            
-                        
-                        if pQuickStop.value or _qStop or _qStop_state or ( (time.time() - self.start_time > self.CURRENT_WAIT_TIME)  \
-                                    and  ((abs(actualCurrentValue) <= self.IDLE_DEV_CURRENT) or (abs(pVelocityIs.value) <= self.IDLE_DEV_VELOCITY))):        # Quick stop is active 
+                    
+                    if pQuickStop.value or _qStop or _qStop_state or ( (time.time() - self.start_time > self.CURRENT_WAIT_TIME)  \
+                                and  ((abs(actualCurrentValue) <= self.IDLE_DEV_CURRENT) or (abs(pVelocityIs.value) <= self.IDLE_DEV_VELOCITY))):        # Quick stop is active 
 
-                        # if pQuickStop.value or _qStop or _qStop_state or ( (time.time() - self.start_time > self.CURRENT_WAIT_TIME)  \
-                                                                        # and  ((abs(actualCurrentValue) <= self.IDLE_DEV_CURRENT))):        # Quick stop is active 
-                        
-                        # if pQuickStop.value or _qStop or _qStop_state :        # Quick stop is active 
-                        
-                            print_inf(f'MAXON entered QuickStop state at port {self.mDev_port}. Exiting watchdog')
-                            print_log(f'{self.devName}: _qStop = {_qStop}(status =  0x{_status:02x} <> {num2binstr(_status)}) // state = {pState.value} (QuckStop by state = {_qStop_state}) //  pQuickStop.value = { pQuickStop.value} //  current = {actualCurrentValue}mA // velocity = {pVelocityIs.value}')
+                        print_inf(f'MAXON entered QuickStop state at port {self.mDev_port}. Exiting watchdog')
+                        print_log(f'{self.devName}: _qStop = {_qStop}(status =  0x{_status:02x} <> {num2binstr(_status)}) // state = {pState.value} (QuckStop by state = {_qStop_state}) //  pQuickStop.value = { pQuickStop.value} //  current = {actualCurrentValue}mA // velocity = {pVelocityIs.value}')
 
-                            # self._deActivateQuickStop()
+                        break
+                else:
+                    print_err(f'WatchDog MAXON failed read QuickStop status on port = {self.mDev_port}. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
+
+                if self.possition_control_mode:
+
+                    MAXON_Motor.epos.VCS_GetMovementState(self.keyHandle, self.mDev_nodeID, byref(pTargetReached), byref(pErrorCode))
+
+                    print_DEBUG(f'WatchDog MAXON: POSITION REACHED (bit 10 at statusword  )={pTargetReached.value}')
+                    if pErrorCode.value == 0:
+
+
+                        if pTargetReached.value:        # Position reached - bit 10 at statusword 
+                            print_inf(f'POSITION REACHED on  MAXON port {self.mDev_port}. Exiting watchdog')
+
                             break
                     else:
-                        print_err(f'WatchDog MAXON failed read QuickStop status on port = {self.mDev_port}. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-
-                    if self.possition_control_mode:
-
-                        MAXON_Motor.epos.VCS_GetMovementState(self.keyHandle, self.mDev_nodeID, byref(pTargetReached), byref(pErrorCode))
-
-                        print_DEBUG(f'WatchDog MAXON: POSITION REACHED (bit 10 at statusword  )={pTargetReached.value}')
-                        if pErrorCode.value == 0:
-
-
-                            if pTargetReached.value:        # Position reached - bit 10 at statusword 
-                                print_inf(f'POSITION REACHED on  MAXON port {self.mDev_port}. Exiting watchdog')
-
-                                break
-                        else:
-                            print_err(f'WatchDog MAXON failed read POSITION REACHED status on port = {self.mDev_port}. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
+                        print_err(f'WatchDog MAXON failed read POSITION REACHED status on port = {self.mDev_port}. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
 
             except Exception as ex:
                 e_type, e_filename, e_line_number, e_message = exptTrace(ex)
@@ -985,7 +902,7 @@ class MAXON_Motor:
         time.sleep(0.1)
 
     
-        if self.mDev_in_motion:
+        if not self.__stop_motion.is_set():
             print_inf(f'Thread is being stoped')
             self.mDev_stop()
             
@@ -996,7 +913,6 @@ class MAXON_Motor:
             print_err(f'-WARNING unlocket mutual access mutex')
 
 
-        self._deActivateQuickStop()
         self.mDev_get_cur_pos()
         self.devNotificationQ.put(self.success_flag)
         
@@ -1004,16 +920,14 @@ class MAXON_Motor:
     
 
     def  mDev_watch_dog(self):
-        self.start_time = time.time()
+        # self.start_time = time.time()
         self.wd = threading.Thread(target=self.mDev_watch_dog_thread)
         self.wd.start()
         return self.wd
 
     def mDev_stop(self)-> bool:
 
-        # if self.dev_lock.locked():
-        #     self.dev_lock.release()
-
+    
         try:
             pErrorCode = c_uint()
             MAXON_Motor.epos.VCS_SetQuickStopState(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
@@ -1022,8 +936,9 @@ class MAXON_Motor:
                 MAXON_Motor.epos.VCS_SetDisableState(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
                 
 
-            self.mDev_in_motion = False
-            print_inf(f'Motor of {self.mDev_type} type is being disabled on port: {self.mDev_port}')
+            self.__stop_motion.set()    
+
+            print_inf(f'Motor is being disabled on port: {self.mDev_port}')
             if pErrorCode.value != 0:
                 print_err(f'ERROR MAXON failed disable port = {self.mDev_port}. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
         except Exception as ex:
@@ -1083,258 +998,6 @@ class MAXON_Motor:
             e_type, e_filename, e_line_number, e_message = exptTrace(ex)
             print_err(f'MAXON current mode move failed on port = {self.mDev_port}. Exception: [{ex}].')
             raise ex
-
-    def gripper_on(self)-> bool:
-        if not self.mutualControl():
-            return False
-        
-        pErrorCode = c_uint()
-        self.success_flag = True
-        
-
-        
-        try:
-
-            MAXON_Motor.epos.VCS_ClearFault(c_void_p(self.keyHandle) , c_uint16(self.mDev_nodeID), byref(pErrorCode))
-            if pErrorCode.value != 0:
-                    print_err(f'ERROR clearing Faults. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-        
-            if self.sensorType == 0:                        # use current mode
-                print_inf(f'gripper_on on port: {self.mDev_port}, velocity/voltage = {self.el_voltage}, Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID}')
-                MAXON_Motor.epos.VCS_ActivateCurrentMode(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
-                if pErrorCode.value != 0:
-                    raise Exception(f'ERROR Activation Current Mode. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-                
-                MAXON_Motor.epos.VCS_SetEnableState(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
-                if pErrorCode.value != 0:
-                    raise Exception(f'ERROR enabling Device. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-
-                MAXON_Motor.epos.VCS_SetCurrentMustEx(self.keyHandle, self.mDev_nodeID, self.el_voltage, byref(pErrorCode))
-                if pErrorCode.value != 0:
-                        raise Exception(f'ERROR: Setting Current: VCS_SetCurrentMustEx(Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID})  pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-
-            else:                                           # sensor is present
-                print_inf(f'gripper_on on port: {self.mDev_port}, velocity = {self.rpm}, Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID}, acc = {MAXON_Motor.acceleration}, dec = {MAXON_Motor.deceleration}')
-
-
-                MAXON_Motor.epos.VCS_ActivateProfileVelocityMode(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
-                if pErrorCode.value != 0:
-                    raise Exception(f'ERROR Activation Profile Velocity Mode. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-                MAXON_Motor.epos.VCS_SetEnableState(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
-                if pErrorCode.value != 0:
-                    raise Exception(f'ERROR enabling Device. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-                MAXON_Motor.epos.VCS_SetVelocityProfile(self.keyHandle, self.mDev_nodeID, MAXON_Motor.acceleration, MAXON_Motor.deceleration, byref(pErrorCode))
-                if pErrorCode.value != 0:
-                        print_err(f'WARNING: Setting Velocity Profile: VCS_SetVelocityProfile(Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID})  pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-                MAXON_Motor.epos.VCS_MoveWithVelocity(self.keyHandle, self.mDev_nodeID, self.rpm, byref(pErrorCode))
-                if pErrorCode.value != 0:
-                    raise Exception(f'ERROR Operating moving with Velocity. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-
-
-                                                                                                          
-        except Exception as ex:
-            e_type, e_filename, e_line_number, e_message = exptTrace(ex)
-            print_err(f'MAXON gripper failed on port = {self.mDev_port}. Exception: [{ex}].')
-            self.success_flag = False
-            self.mDev_stop()
-            if self.dev_lock.locked():
-                self.dev_lock.release()
-            return False
-            
-        self.gripper_onof = True    
-        self.mDev_watch_dog()
-        return True
-
-    def gripper_off(self)->bool:
-        if not self.mutualControl():
-            return False
-        
-        self.success_flag = True
-        pErrorCode = c_uint()
-        
-
-        try:
-            
-
-            MAXON_Motor.epos.VCS_ClearFault(c_void_p(self.keyHandle) , c_uint16(self.mDev_nodeID), byref(pErrorCode))
-            if pErrorCode.value != 0:
-                    print_err(f'ERROR clearing Faults. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-            
-            if self.sensorType == 0:                        # use current mode
-                print_inf(f'gripper_off on port: {self.mDev_port}, velocity/voltage = -{self.el_voltage}, Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID}')
-                MAXON_Motor.epos.VCS_ActivateCurrentMode(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
-                if pErrorCode.value != 0:
-                    raise Exception(f'ERROR Activation Current Mode. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-                
-                MAXON_Motor.epos.VCS_SetEnableState(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
-                if pErrorCode.value != 0:
-                    raise Exception(f'ERROR enabling Device. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-
-                MAXON_Motor.epos.VCS_SetCurrentMustEx(self.keyHandle, self.mDev_nodeID, (-1)*self.el_voltage, byref(pErrorCode))
-                if pErrorCode.value != 0:
-                        raise Exception(f'ERROR: Setting Current: VCS_SetCurrentMustEx(Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID})  pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-
-            else:  
-
-                print_inf(f'gripper_off on port: {self.mDev_port}, velocity = {self.rpm}, Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID}, acc = {MAXON_Motor.acceleration}, dec = {MAXON_Motor.deceleration}')
-
-                MAXON_Motor.epos.VCS_ActivateProfileVelocityMode(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
-                if pErrorCode.value != 0:
-                    raise Exception(f'ERROR Activation Profile Velocity Mode. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-                MAXON_Motor.epos.VCS_SetEnableState(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
-                if pErrorCode.value != 0:
-                    raise Exception(f'ERROR enabling Device. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-                MAXON_Motor.epos.VCS_SetVelocityProfile(self.keyHandle, self.mDev_nodeID, MAXON_Motor.acceleration, MAXON_Motor.deceleration, byref(pErrorCode))
-                if pErrorCode.value != 0:
-                        print_err(f'WARNING: Setting Velocity Profile: VCS_SetVelocityProfile(Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID})  pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-                MAXON_Motor.epos.VCS_MoveWithVelocity(self.keyHandle, self.mDev_nodeID, (-1)*self.rpm, byref(pErrorCode))
-                if pErrorCode.value != 0:
-                    raise Exception(f'ERROR Operating moving with Velocity. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-
-
-                                                                                                          
-        except Exception as ex:
-            e_type, e_filename, e_line_number, e_message = exptTrace(ex)
-            print_err(f'MAXON gripper failed on port = {self.mDev_port}. Exception: [{ex}].')
-            self.success_flag = False
-            self.mDev_stop()
-            if self.dev_lock.locked():
-                self.dev_lock.release()
-            return False
-            
-        self.gripper_onof = False    
-        self.mDev_watch_dog()
-
-        return True
-    
-
-    def timeRotaterFw(self, time, velocity = None) -> bool:
-        pErrorCode = c_uint()
-        
-        if not self.mutualControl():
-            return False
-        
-        if velocity == None:
-            velocity = int(self.rpm)
-
-
-        self.success_flag = True
-        self.possition_control_mode = False
-        self.time_control_mode = True 
-        self.rotationTime = time
-        print_inf(f'Going forward (time) on port = {self.mDev_port} for {time} seconds, velocity = {velocity}, Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID}, acc = {MAXON_Motor.acceleration}, dec = {MAXON_Motor.deceleration}')
-
-        try:
-            
-
-            if self.sensorType == 0 and not (velocity == 0):                        # use current mode
-                self.currentModeMove(self.el_voltage)
-            
-            else:
-
-                MAXON_Motor.epos.VCS_ClearFault(c_void_p(self.keyHandle) , c_uint16(self.mDev_nodeID), byref(pErrorCode))
-                if pErrorCode.value != 0:
-                        print_err(f'ERROR clearing Faults. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-
-                if (velocity != 0):
-                    MAXON_Motor.epos.VCS_ActivateProfileVelocityMode(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
-                    if pErrorCode.value != 0:
-                        raise Exception(f'ERROR Activation Profile Velocity Mode. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-                    MAXON_Motor.epos.VCS_SetEnableState(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
-                    if pErrorCode.value != 0:
-                        raise Exception(f'ERROR enabling Device. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-                    MAXON_Motor.epos.VCS_SetVelocityProfile(self.keyHandle, self.mDev_nodeID, MAXON_Motor.acceleration, MAXON_Motor.deceleration, byref(pErrorCode))
-                    if pErrorCode.value != 0:
-                        print_err(f'WARNING: Setting Velocity Profile: VCS_SetVelocityProfile(Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID})  pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-                    MAXON_Motor.epos.VCS_MoveWithVelocity(self.keyHandle, self.mDev_nodeID, velocity, byref(pErrorCode))
-                    if pErrorCode.value != 0:
-                        raise Exception(f'ERROR Operating moving with Velocity. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-                else:           # speed == 0
-                    MAXON_Motor.epos.VCS_HaltVelocityMovement(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
-                    if pErrorCode.value != 0:
-                        raise Exception(f'ERROR halting device (speed = 0). pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-           
-
-                                                                                                          
-        except Exception as ex:
-            e_type, e_filename, e_line_number, e_message = exptTrace(ex)
-            print_err(f'MAXON Time Rotator failed on port = {self.mDev_port}. Exception: [{ex}].')
-            self.success_flag = False
-            self.mDev_stop()
-            if self.dev_lock.locked():
-                self.dev_lock.release()
-            return False
-        
-        
-        else:
-            print_inf (f"MAXON time FW started on port = {self.mDev_port} " )
-        
-        self.mDev_watch_dog()
-        return True
-        
-
-    def timeRotaterBw(self, time, velocity = None)->bool:
-        pErrorCode = c_uint()
-
-        if not self.mutualControl():
-            return False
-        
-        if velocity == None:
-            velocity = int(self.rpm)
-
-        self.success_flag = True
-        self.possition_control_mode = False
-        self.time_control_mode = True 
-        self.rotationTime = time
-        print_inf(f'Going backward (time) on port = {self.mDev_port}  for {time} seconds, velocity = {velocity}, Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID}, acc = {MAXON_Motor.acceleration}, dec = {MAXON_Motor.deceleration}')
-
-      
-        try:
-            if self.sensorType == 0 and not (velocity == 0):                        # use current mode
-                self.currentModeMove((-1)*self.el_voltage)
-            
-            else:
-
-                MAXON_Motor.epos.VCS_ClearFault(c_void_p(self.keyHandle) , c_uint16(self.mDev_nodeID), byref(pErrorCode))
-                if pErrorCode.value != 0:
-                    print_err(f'ERROR clearing Faults. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-
-                if (velocity != 0):
-                    MAXON_Motor.epos.VCS_ActivateProfileVelocityMode(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
-                    if pErrorCode.value != 0:
-                        raise Exception(f'ERROR Activation Profile Velocity Mode. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-                    MAXON_Motor.epos.VCS_SetEnableState(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
-                    if pErrorCode.value != 0:
-                        raise Exception(f'ERROR enabling Device. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-                    MAXON_Motor.epos.VCS_SetVelocityProfile(self.keyHandle, self.mDev_nodeID, MAXON_Motor.acceleration, MAXON_Motor.deceleration, byref(pErrorCode))
-                    if pErrorCode.value != 0:
-                        print_err(f'WARNING: Setting Velocity Profile: VCS_SetVelocityProfile(Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID})  pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-                    MAXON_Motor.epos.VCS_MoveWithVelocity(self.keyHandle, self.mDev_nodeID, (-1)*velocity, byref(pErrorCode))
-                    if pErrorCode.value != 0:
-                        raise Exception(f'ERROR Operating moving with Velocity. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-
-                else:           # speed == 0
-                    MAXON_Motor.epos.VCS_HaltVelocityMovement(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
-                    if pErrorCode.value != 0:
-                        raise Exception(f'ERROR halting device (speed = 0). pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-           
-                                                                                                          
-        except Exception as ex:
-            e_type, e_filename, e_line_number, e_message = exptTrace(ex)
-            print_err(f'MAXON Time Rotator failed on port = {self.mDev_port}. Exception: [{ex}].')
-            self.success_flag = False
-            self.mDev_stop()
-            if self.dev_lock.locked():
-                self.dev_lock.release()
-            return False
-        
-        else:
-            print_inf (f"MAXON time BW started on port = {self.mDev_port} " )
- 
-
-        self.mDev_watch_dog()
-        return True
-
 
 
     def go2pos(self, new_position, velocity = None, stall=None)->bool:
@@ -1401,7 +1064,8 @@ class MAXON_Motor:
             print_err(f'MAXON dev failed to stall on port = {self.mDev_port}. Exception: {ex} of type: {type(ex)}.')
             return False
 
-        self.mDev_in_motion = False
+        self.__stop_motion.set()    
+
 
         if self.dev_lock.locked():
             self.dev_lock.release()
@@ -1417,10 +1081,7 @@ class MAXON_Motor:
         if not velocity == None:
             self.rpm = int(velocity)
 
-        self._activateQuickStop()
 
-        if polarity is not None:
-            self._set_QuickStopPolarity(polarity)
 
         self.success_flag = True
         self.possition_control_mode = False
@@ -1487,10 +1148,6 @@ class MAXON_Motor:
         if not velocity == None:
             self.rpm = int(velocity)
 
-        self._activateQuickStop()
-
-        if polarity is not None:
-            self._set_QuickStopPolarity(polarity)
 
         self.success_flag = True
         self.possition_control_mode = False
@@ -1836,6 +1493,7 @@ if __name__ == "__main__":
 
         down = graphic_off = True
 
+        sg.PopupAnimated(image_source=None)
 
         if devs is None or len(devs) == 0:
             print_err(f"No devices found (dev = {devs})")       
@@ -1857,7 +1515,8 @@ if __name__ == "__main__":
             #get event
             event, values = window.read(timeout=100)
 
-            # print(event, values)
+            if not 'TIMEOUT' in event:
+                print(event, values)
 
             #When the window is closed or the Exit button is pressed
             if event in (sg.WIN_CLOSED, 'Exit'):
@@ -1890,16 +1549,14 @@ if __name__ == "__main__":
 
                 dev_rotator.go2pos(go_pos)
 
-                dev_rotator.mDev_pressed = True
                 # DeActivateMotorControl(window, f'--DIST_ROTATOR--', dev_rotator.c_gui)
             
             elif '-DIST_ROTATOR_RIGHT-' in event:
                 
                 # DeActivateMotorControl(window, '--DIST_ROTATOR--', dev_rotator.c_gui)
-                wTask = pm.WorkingTask(pm.CmdObj(device=dev_rotator, cmd=pm.OpType.go_fwrd_on), sType = pm.RunType.single)
+                # wTask = pm.WorkingTask(pm.CmdObj(device=dev_rotator, cmd=pm.OpType.go_fwrd_on), sType = pm.RunType.single)
                 dev_rotator.mDev_forward()
 
-                dev_rotator.mDev_pressed = True
 
             elif '-DIST_ROTATOR_LEFT-' in event:
                 # DeActivateMotorControl(window, '--DIST_ROTATOR--', dev_rotator.c_gui)
@@ -1907,7 +1564,6 @@ if __name__ == "__main__":
                 # wTask = pm.WorkingTask(pm.CmdObj(device=dev_rotator, cmd=pm.OpType.go_bcwrd_off), sType = pm.RunType.single)
                 dev_rotator.mDev_backwrd()
 
-                dev_rotator.mDev_pressed = True
             
             elif '-DIST_ROTATOR_STOP-' in event:
                 # wTask = pm.WorkingTask(pm.CmdObj(device=dev_rotator, cmd=pm.OpType.stop), sType = pm.RunType.single)
