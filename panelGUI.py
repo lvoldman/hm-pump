@@ -4,7 +4,7 @@ import sys
 
 from PySide6 import QtCore, QtWidgets, QtGui
 from servo_motor import servoMotor, servoParameters
-from serial_scale  import serialScale
+from serial_scale  import serialScale, serialScaleStub
 
 
 
@@ -268,7 +268,8 @@ class ScaleWorker(QtCore.QObject):
 
     def __init__(self):
         super().__init__()
-        self._scale: serialScale | None = None
+        # self._scale: serialScale | None = None
+        self._scale: serialScaleStub | None = None
         self._port: str | None = None
         self._poll_interval: float = 0.5
         self._timer = QtCore.QTimer()
@@ -281,7 +282,8 @@ class ScaleWorker(QtCore.QObject):
                 self.disconnect_scale()
                 return
             self._port = port
-            self._scale = serialScale(port, poll_interval=self._poll_interval)
+            # self._scale = serialScale(port, poll_interval=self._poll_interval)
+            self._scale = serialScaleStub(port, poll_interval=self._poll_interval)
             ok = self._scale.connect()
             self.connectedChanged.emit(bool(ok))
             if ok:
@@ -317,7 +319,7 @@ class ScaleWorker(QtCore.QObject):
         self.telemetryChanged.emit({"cmd": "zero", "scale_port": self._port})
 
     def _restart_timer(self) -> None:
-        if self._scale and self._scale.connection and self._scale.connection.is_open:
+        if self._scale and self._scale.is_connected():
             self._timer.start(int(self._poll_interval * 1000))
         else:
             self._timer.stop()
@@ -950,7 +952,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.log_tab.resolutionChanged.connect(self._on_log_resolution_changed)
 
         self.motor_panel.set_motor_list(servoMotor.listMotors())
-        self.wp_panel.set_scale_list(serialScale.listScales())
+        # self.wp_panel.set_scale_list(serialScale.listScales())
+        self.wp_panel.set_scale_list(serialScaleStub.listScales())
 
     def _on_log_resolution_changed(self, seconds: float) -> None:
         ms = max(100, int(seconds * 1000))

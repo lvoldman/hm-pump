@@ -1,3 +1,4 @@
+import random
 import serial.tools.list_ports
 import serial
 import threading    
@@ -20,28 +21,30 @@ class serialScale:
         return  serialScale._scales
     
     def __init__(self, serial_port: str, poll_interval: float = 0.1):
-        self.serial_port = serial_port
-        self.connection = None
+        self.__serial_port = serial_port
+        self.__connection = None
         self.__wd_stop:threading.Event = threading.Event() # Event to stop watchdog thread
         self.__current_weight:float = 0.0                     # Current weight reading
         self.__poll_interval = poll_interval
     
-    def updqate_serial_port(self, serial_port: str):
-        self.serial_port = serial_port
+    def update_serial_port(self, serial_port: str):
+        print(f'Updating serial port to {self.__serial_port}-> {serial_port}')
+        self.__serial_port = serial_port
 
     def update_poll_interval(self, poll_interval: float):
+        print(f'Updating poll interval to {self.__poll_interval}-> {poll_interval}')
         self.__poll_interval = poll_interval
 
     def connect(self)->bool:
         try:
 
-            self.connection = serial.Serial(self.serial_port, 
+            self.__connection = serial.Serial(self.__serial_port, 
                                             baudrate=9600, 
                                             bytesize=serial.EIGHTBITS,
                                             parity=serial.PARITY_NONE,
                                             stopbits=serial.STOPBITS_ONE,
                                             timeout=1)
-            print(f'Connected to scale on {self.serial_port}')
+            print(f'Connected to scale on {self.__serial_port}')
             # Start watchdog thread
             wd_thread = threading.Thread(target=self.__watch_dog_thread, daemon=True)   
             self.__wd_stop.clear()
@@ -49,18 +52,21 @@ class serialScale:
             
             return True
         except Exception as e:
-            print(f'Error connecting to scale on {self.serial_port}: {e}')
-            self.connection = None
+            print(f'Error connecting to scale on {self.__serial_port}: {e}')
+            self.__connection = None
             return False
+        
+    def is_connected(self)->bool:
+        return self.__connection is not None and self.__connection.is_open
     
     def read_weight(self)->float:   
         try:
-            if self.connection and self.connection.is_open:
-                # self.connection.write(b'READ\n')  # Command to read weight; replace with actual command
-                self.connection.reset_input_buffer()
-                line = self.connection.readline().decode('utf-8').strip()  # twice read to get fresh data 
+            if self.__connection and self.__connection.is_open:
+                # self.__connection.write(b'READ\n')  # Command to read weight; replace with actual command
+                self.__connection.reset_input_buffer()
+                line = self.__connection.readline().decode('utf-8').strip()  # twice read to get fresh data 
                                                                             # (in case of string was partially read)
-                line = self.connection.readline().decode('utf-8').strip()
+                line = self.__connection.readline().decode('utf-8').strip()
                 sign:int = -1 if line[5] == '-' else 1
                 weight:float = sign * float(line[6:15])
                 return weight
@@ -74,9 +80,9 @@ class serialScale:
     def disconnect(self)->bool:
         try:
             self.__wd_stop.set()
-            if self.connection and self.connection.is_open:
+            if self.__connection and self.__connection.is_open:
                 print('Disconnecting from scale...')
-                self.connection.close()
+                self.__connection.close()
             return True
         except Exception as e:
             print(f'Error disconnecting from scale: {e}')
@@ -105,6 +111,55 @@ class serialScale:
 
 
 # =====  UNITEST  =====
+# ===== Stub code for testing serialScale class =====
+class serialScaleStub(serialScale):
+    @staticmethod
+    def listScales()->list[str]:       # List available serial scales COM ports
+        return  ["COM3", "COM4"]
+    
+    def __init__(self, serial_port: str, poll_interval: float = 0.1):
+        super().__init__(serial_port, poll_interval)
+        self.__wd_stop:threading.Event = threading.Event() # Event to stop watchdog thread
+        self.__test_weight =random.randint(200, 9500)/100.0
+        self.__poll_interval = poll_interval
+        self.__serial_port = serial_port
+
+    def read_weight(self)->float:
+        # Simulate weight reading with random value and
+        sign = -1 if random.randint(0,1) == 0 else 1
+        self.__test_weight +=  random.randint(200, 500)/100.0*sign
+        return self.__test_weight
+    
+    def update_serial_port(self, serial_port: str):
+        print(f'Updating serial port to {self.__serial_port}-> {serial_port}')
+
+    def update_poll_interval(self, poll_interval: float):
+        print(f'Updating poll interval to {self.__poll_interval}-> {poll_interval}')
+
+    def connect(self)->bool:
+        print(f'Simulated connection to scale on {self.__serial_port}')
+        wd_thread = threading.Thread(target=self.__watch_dog_thread, daemon=True)   
+        wd_thread.start()   
+        return True
+    def disconnect(self)->bool:
+        self.__wd_stop.set()
+        print(f'Simulated disconnection from scale on {self.__serial_port}')
+        return True
+    def __watch_dog_thread(self):
+        self.__wd_stop.clear()
+        try:
+            while not self.__wd_stop.is_set():
+                self.__test_weight = self.read_weight()  
+                pass                                # Monitor operation status
+                                
+                time.sleep(self.__poll_interval)
+        except Exception as e:
+            print(f'Error in watch dog thread: {e}')
+
+    def __del__(self):
+        self.disconnect()   
+#  =====  UNITEST  =====
+
 if __name__ == "__main__":
     from datetime import datetime, date
     try:
