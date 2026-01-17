@@ -172,7 +172,8 @@ class MAXON_Motor:
     resultType = namedtuple("resultType", ["res", "answData", "query"])
     activated_devs = []                                     # port numbers
     protocol = None
-    devices:MAXON_Motor.portSp = None               # list of devices
+    # devices:MAXON_Motor.portSp = None               # list of devices
+    devices:list[MAXON_Motor.portSp] = None               # list of devices
     intf = None
     mxn_lock = Lock()                               # COM port access mutex 
     epos = None
@@ -1293,6 +1294,98 @@ class MAXON_Motor:
 
 
 #------------------------- U N I T E S T ----------------------------
+# Stub class for MAXON motor for unit testing without hardware
+class MAXON_Motor_Stub: 
+    operation = namedtuple("operation", ["fw", "bw", "g2p", "stop"])
+    def __init__(self, mxnDev:MAXON_Motor.portSp):
+        self.mDev_pos:int = 0                                 #  current position 
+        self.wd = None                                      # watch dog identificator
+        self.mDev_SN = mxnDev.sn                                   # Serial N (0x1018:0x04)
+        self.__stop_motion:threading.Event = threading.Event()  # Event to stop motion thread
+        self.__operation:MAXON_Motor_Stub.operation = MAXON_Motor_Stub.operation.stop  # Operations enum
+        self.rpm:int = self.DevOpSPEED 
+        self.start_time: float = 0                                   # Start thread time
+        self.devName:str = mxnDev.sn
+        self.devNotificationQ = Queue()
+        self.mDev_get_cur_pos()
+        print_inf(f'({self.devName}) Serial number = {self.mDev_SN} Position = {self.mDev_pos}')
+        self.mDev_status = True
+
+    def __del__(self):
+        print_inf(f'Releasing/deleting MAXON on port {self.mDev_port}')  
+        self.__stop_motion.set()    
+
+    @staticmethod
+    def enum_devs(mxnDevice, mxnInterface)->list[MAXON_Motor.portSp]:
+        return [MAXON_Motor.portSp('stub_dev', 'stub_protocol', 'stub_usb','stub_port', '9600', '12345', 1, 'stub_sensor')]
+
+    @staticmethod
+    def init_devices(mxnDevice=b'EPOS4', mxnInterface=b'USB'):
+        return [MAXON_Motor.portSp('stub_dev', 'stub_protocol', 'stub_usb','stub_port', '9600', '12345', 1, 'stub_sensor')]
+
+    def init_dev(self) -> bool:
+        return True
+
+    def mDev_get_actual_current(self) -> int:
+        return 10
+        
+
+    def _is_pos_reached(self, target_pos:int, ex_limit:int) -> bool:
+        return False
+        
+    def  mDev_watch_dog_thread(self):
+        print_inf (f'>>> WatchDogStub MAXON  started on  port = {self.mDev_port}, dev = {self.devName}, position = {self.mDev_pos}')
+        while (not self.__stop_motion.is_set()):
+                    if self.__operation == self.operation.fw:
+                         self.mDev_pos += 10
+                    elif self.__operation == self.operation.bw:
+                        self.mDev_pos -= 10
+        self.devNotificationQ.put(True)
+        self.__operation = self.operation.stop
+        print_inf (f'<<< WatchDogStub MAXON stopped on  port = {self.mDev_port}, dev = {self.devName}, position = {self.mDev_pos}')
+        return
+    
+
+    def  mDev_watch_dog(self):
+        # self.start_time = time.time()
+        self.wd = threading.Thread(target=self.mDev_watch_dog_thread)
+        self.wd.start()
+        return self.wd
+
+    def mDev_stop(self)-> bool:
+        self.__stop_motion.set()
+        return True
+
+    def go2pos(self, new_position, velocity = None, stall=None)->bool:
+        self.mDev_watch_dog()
+        return True  
+
+    def mDev_stall(self)->bool:
+        return True
+
+    def  mDev_forward(self, velocity = None, timeout=None, polarity:bool=None, stall = None)->bool:
+        self.__operation = self.operation.fw
+        self.mDev_watch_dog()
+        return True
+    
+    def  mDev_backwrd(self, velocity = None, timeout=None, polarity:bool = None, stall = None)-> bool:
+        self.__operation = self.operation.bw                    # no need watchdog for zero speed
+        self.mDev_watch_dog()
+        return True
+    
+    def mDev_stored_pos(self): 
+        return self.mDev_pos
+   
+    def mDev_get_cur_pos(self) -> int:
+        return self.mDev_pos        
+
+    def  mDev_reset_pos(self)->bool:
+        self.mDev_stop()
+        self.mDev_pos = 0
+        return True
+
+
+#Basic test of the module
     
 if __name__ == "__main__":
 
@@ -1325,22 +1418,7 @@ if __name__ == "__main__":
     
     CUSTOM_MENU_RIGHT_CLICK_VER_LOC_EXIT = ['', ['Version', 'File Location', 'Exit']]
 
-    # trolley  = [[sg.Push(), sg.Text('Trolley', font='Any 20'),  sg.Push()],
-    #         [sg.T('Position'), sg.Text("_", size=(10, 1), relief = sg.RELIEF_SUNKEN, justification = 'center', \
-    #             border_width = 2, key='-TROLLEY_POSSITION-'), sg.Button(button_text = "Reset", key='-TROLLEY_TARGET_RESET-') ],
-    #         [sg.Text('Target'), sg.Input(size=(10, 1), enable_events=True, key='-TROLLEY_TARGET-', \
-    #             font=('Arial Bold', 10), justification='left'), sg.Button(button_text = "Set & Go", key='-TROLLEY_POS_SET-')],
-    #         [sg.Button( button_color=sg.TRANSPARENT_BUTTON, image_filename = image_left, image_size=(55, 60), \
-    #             image_subsample=2, border_width=0, key='-TROLLEY_LEFT-'),
-    #             sg.Frame('',[[sg.Text('Velocity (RPM)')], [sg.Input(size=(15, 1), enable_events=True, key='-TROLLEY_VELOCITY-', \
-    #                 font=('Arial Bold', 10), justification='left')]], border_width=0),
-    #         sg.Button( button_color=sg.TRANSPARENT_BUTTON, image_filename = image_right, image_size=(55, 60), \
-    #             image_subsample=2, border_width=0, key='-TROLLEY_RIGHT-')], 
-    #         [sg.Button(button_text = 'Stop',  key='-TROLLEY_STOP-')]]
-    
-    # la_gripper = [[sg.Button('', image_data=toggle_btn_off, key='ONOFF', \
-    #             button_color=(sg.theme_background_color(), sg.theme_background_color()), border_width=0)], 
-    #             [sg.Button('Exit')]]
+
 
     def setGUI(_num_of_devs: int)->list:
         dev_layout = list()

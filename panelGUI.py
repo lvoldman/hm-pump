@@ -44,11 +44,14 @@ class MotorWorker(QtCore.QObject):
     @QtCore.Slot(str)
     def connect_motor(self, sn: str) -> None:
         try:
-            if not sn or "not selected" in sn:
+            if self._motor and (not sn or "not selected" in sn):
                 self.disconnect_motor()
                 return
+            if self._motor and not (self._sn == sn):
+                self.disconnect_motor()
+
             # NOTE: servoMotor currently has no real connect-by-SN; we keep SN for future integration.
-            self._motor = servoMotor()
+            self._motor = servoMotor(serial_number=sn)
             self._sn = sn
             self._set_state(MotorState.IDLE)
             self.connectedChanged.emit(True)
@@ -63,6 +66,9 @@ class MotorWorker(QtCore.QObject):
     def disconnect_motor(self) -> None:
         try:
             self._stop_elapsed()
+            if self._motor:
+                self._motor.stop()
+                del self._motor
             self._motor = None
             self._sn = None
             self.connectedChanged.emit(False)

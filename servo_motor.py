@@ -3,7 +3,9 @@ import threading
 from enum import Enum
 from dataclasses import dataclass
 import time
+from maxon import MAXON_Motor, MAXON_Motor_Stub          # Assuming maxon is a module for servo motor control
 
+motServo = MAXON_Motor_Stub # For testing purposes, replace with MAXON_Motor for actual implementation
 
 @dataclass
 class servoParameters:
@@ -18,12 +20,16 @@ class servoParameters:
 
 class servoMotor:
     opType = Enum("opType", ["forward", "backward", "go2pos", "stoped"])
+    _motors = list[MAXON_Motor.portSp]
 
     @staticmethod
     def listMotors()->list[str]:       # List available servo motors SNs
-        _motors = []
-        pass                  # Implement logic to list available servo motors
-        return  _motors
+        servoMotor._motors = motServo.init_devices()      
+        sn_motors:list[str] = list()
+
+        for m in servoMotor._motors:
+            sn_motors.append(m.sn)
+        return  sn_motors
     
     def __init__(self, serial_number:str):
         self.devNotificationQ:Queue = Queue()           # Queue for notifications from watchdog thread 
@@ -36,15 +42,27 @@ class servoMotor:
         self.__start_time:float = 0.0                     # Start time of current operation
         self.serial_number = serial_number                # Serial number of the servo motor
         self.__wd_stop.clear()
+        for m in servoMotor._motors:
+            if m.sn == serial_number:
+                self.__motor = motServo(m)
+                break
+        else:
+            raise ValueError(f'Servo motor with serial number {serial_number} not found')
+        
+
 
 
     @property
     def position(self) -> int:
-        return self.__position
+        return self.__motor.mDev_get_cur_pos()
     
     def go2pos(self, new_position, _parms: servoParameters)->bool:
         try:
-            pass                   # Implement go to position logic here
+            self.__motor.go2pos(new_position, 
+                                velocity=_parms.velocity,
+                                acceleration=_parms.acceleration,
+                                deceleration=_parms.deceleration,
+                                stall=_parms.stall)
         except Exception as e:
             print(f'Error in go2pos: {e}')
             return False
@@ -56,7 +74,10 @@ class servoMotor:
 
     def forward(self, _parms: servoParameters)->bool:
         try:
-            pass                   # Implement  forward logic here
+            self.__motor.forward(velocity=_parms.velocity,
+                                 acceleration=_parms.acceleration,
+                                 deceleration=_parms.deceleration,
+                                 stall=_parms.stall)
         except Exception as e:
             print(f'Error in go2pos: {e}')
             return False
@@ -67,7 +88,10 @@ class servoMotor:
     
     def backward(self, _parms: servoParameters)->bool:
         try:
-            pass                   # Implement  backward logic here
+            self.__motor.backward(velocity=_parms.velocity,
+                                  acceleration=_parms.acceleration,
+                                  deceleration=_parms.deceleration,
+                                  stall=_parms.stall)
         except Exception as e:
             print(f'Error in go2pos: {e}')
             return False
@@ -79,6 +103,7 @@ class servoMotor:
     def stop(self)->bool:                               # atomic stop operation (no watchdog)
         self.__wd_stop.set()                      # Signal watchdog thread to stop
         try:
+            self.__motor.mDev_stop()
             # Unblock any waiters (best-effort)
             self.devNotificationQ.put(False)
         except Exception:
