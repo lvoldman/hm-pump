@@ -6,46 +6,39 @@ from dataclasses import dataclass
 from queue import Queue 
 from collections import namedtuple
 import  unidecode, struct
+
+from rich.logging import RichHandler
+from rich.console import Console
+# rich_console = Console(stderr=False)
+
+import inspect
+
 uTranslate = lambda _str: logging.debug(unidecode.unidecode(_str))
 
 
 logFileDate = datetime.datetime.now().strftime(f"LOG_%Y_%m_%d_%H_%M.txt")
-# log_format = "%(asctime)s: %(filename)s--%(funcName)s/%(lineno)d -- %(thread)d [%(threadName)s] %(message)s" 
-log_format = u'%(asctime)s: %(filename)s--%(funcName)s/%(lineno)d -- %(thread)d [%(threadName)s] %(message)s' 
+log_format = u'%(asctime)s [%(levelname)s]: %(filename)s--%(funcName)s/%(lineno)d -- %(thread)d [%(threadName)s] %(message)s' 
+
+
+
 logging.basicConfig(format=log_format, handlers=[
-        logging.StreamHandler(sys.stdout),
-        # logging.FileHandler(logFileDate, mode="w")], encoding='utf-8', level=logging.DEBUG, datefmt="%H:%M:%S")
+            RichHandler(
+                rich_tracebacks=True,         # nice rich tracebacks in the log
+                markup=True,                  # allows using rich markup in messages
+                show_path=False,              # removes long file path (usually not needed)
+                console=Console(stderr=False),           # can be omitted - defaults to stdout
+            ),
+            logging.FileHandler(logFileDate, mode="w", encoding = 'utf-8')
+            ],
+        encoding = "utf8", level=logging.DEBUG)
 
-        # logging.FileHandler(logFileDate, mode="w", encoding = 'utf-8')], encoding = "utf8", level=logging.INFO)
-        logging.FileHandler(logFileDate, mode="w", encoding = 'utf-8')], encoding = "utf8", level=logging.WARNING)
-        
-        # logging.FileHandler(logFileDate, mode="w"), ], encoding = "UTF-8", level=logging.DEBUG)
-        # logging.FileHandler(logFileDate, mode="w")], level=logging.DEBUG)
-        # logging.FileHandler(logFileDate, mode="w")], encoding='windows-1250', level=logging.DEBUG)
-
-# void_f = lambda a : a
 void_f = lambda a : None
 
-
-# print_log = logging.info
-# print_inf = logging.info
-# print_err = logging.info
-# print_DEBUG = logging.info
-
-print_log = logging.warning
-print_inf = logging.warning
-print_err = logging.warning
-print_DEBUG = logging.warning
-
-
-
-# print_log = lambda a : logging.debug('<LOG> '+ a)
-# print_inf = lambda a : logging.debug('<INF> '+ a)
-# print_err = lambda a : logging.debug('<ERR> '+ a)
-# print_DEBUG = lambda a : logging.debug('<DEBUG> '+ a)
-
-
-# set_parm = lambda devName, parms, parName:  parms[devName][parName] if ((devName in parms.keys()) and (parName in parms[devName].keys())) else parms['DEAFULT'][parName]
+print_DEBUG = logging.debug
+print_log = logging.info
+print_warn = logging.warning
+print_err = logging.error
+print_trace = logging.exception
 
 set_parm = lambda devName, parms, parName:  parms[devName][parName] if ((devName in parms.keys()) and (parName in parms[devName].keys()))   \
       else ( parms['DEAFULT'][parName] if parName in parms['DEAFULT'].keys() else None)
@@ -236,6 +229,14 @@ def str2ip(_str:str) -> tuple:
     _str = re.sub(r"\s+", "", _str)                 # remove spaces
     return tuple(map(str, _str.split(':')))
 
+
+def print_call_stack(levels=6):
+    print_DEBUG(f"\nStack of ({levels} levels back):")
+    for i, frame_info in enumerate(inspect.stack()[1:levels+1], 1):
+        func_name = frame_info.function
+        file_name = frame_info.filename
+        line_no   = frame_info.lineno
+        print_DEBUG(f"  {i:2d}) {func_name:20}  ←  {file_name}:{line_no}")
     
 # def SetLED(window:sg.Window, key:str, color:str):
 #     graph = window[key]

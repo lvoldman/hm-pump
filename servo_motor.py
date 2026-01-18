@@ -4,6 +4,8 @@ from enum import Enum
 from dataclasses import dataclass
 import time
 from maxon import MAXON_Motor, MAXON_Motor_Stub          # Assuming maxon is a module for servo motor control
+from common_utils import print_err, print_DEBUG, print_warn, print_log, exptTrace, print_trace, \
+                        print_call_stack
 
 motServo = MAXON_Motor_Stub # For testing purposes, replace with MAXON_Motor for actual implementation
 
@@ -63,8 +65,12 @@ class servoMotor:
                                 acceleration=_parms.acceleration,
                                 deceleration=_parms.deceleration,
                                 stall=_parms.stall)
-        except Exception as e:
-            print(f'Error in go2pos: {e}')
+            
+            print_DEBUG(f'go2pos command issued to position {new_position} with parms: {_parms}')
+
+        except Exception as ex:
+            print_err(f'Error in go2pos: {ex}')
+            exptTrace(ex)
             return False
         
         with self.__op_lock:
@@ -74,12 +80,15 @@ class servoMotor:
 
     def forward(self, _parms: servoParameters)->bool:
         try:
-            self.__motor.forward(velocity=_parms.velocity,
-                                 acceleration=_parms.acceleration,
-                                 deceleration=_parms.deceleration,
-                                 stall=_parms.stall)
-        except Exception as e:
-            print(f'Error in go2pos: {e}')
+            self.__motor.mDev_forward(velocity=_parms.velocity,
+                                acceleration=_parms.acceleration,
+                                deceleration=_parms.deceleration,
+                                timeout=_parms.timeout,
+                                polarity=None,
+                                stall=_parms.stall)
+        except Exception as ex:
+            print_err(f'Error in forward: {ex}')
+            exptTrace(ex)
             return False
         with self.__op_lock:
             self.__current_op = servoMotor.opType.forward   # Update current operation
@@ -88,12 +97,15 @@ class servoMotor:
     
     def backward(self, _parms: servoParameters)->bool:
         try:
-            self.__motor.backward(velocity=_parms.velocity,
+            self.__motor.mDev_backward(velocity=_parms.velocity,
                                   acceleration=_parms.acceleration,
                                   deceleration=_parms.deceleration,
+                                  timeout=_parms.timeout,
+                                  polarity=None,
                                   stall=_parms.stall)
-        except Exception as e:
-            print(f'Error in go2pos: {e}')
+        except Exception as ex:
+            print_err(f'Error in backward: {ex}')
+            exptTrace(ex)
             return False
         with self.__op_lock:
             self.__current_op = servoMotor.opType.backward   # Update current operation
@@ -106,34 +118,35 @@ class servoMotor:
             self.__motor.mDev_stop()
             # Unblock any waiters (best-effort)
             self.devNotificationQ.put(False)
-        except Exception:
-            pass
+        except Exception as ex:
+            print_err(f'Error in stop: {ex}')
+            exptTrace(ex)
         return True
 
     def  _watch_dog_run(self, timeout:float=None)->threading.Thread:
         self.__start_time = time.time()                 # Record start time of operation
-        print(f'Running whatch dog thread')         
+        print_log(f'Running whatch dog thread')         
         self.__wd = threading.Thread(target=self.__watch_dog_thread , args=(timeout,), daemon=True)
                                                         # Start watchdog thread
         self.__wd.start()   
         return self.__wd
         
     def __watch_dog_thread(self, timeout:float=None):
-        print(f'Watch dog thread started')
+        print_log(f'Watch dog thread started')
         _status = True
         try:
             while not self.__wd_stop.is_set():
                 pass                                # Monitor operation status
                 if timeout is not None:
                     if (time.time() - self.__start_time) > timeout:
-                        print(f'Operation timed out')
+                        print_log(f'Operation timed out')
                         _status = False
                         break
                 time.sleep(0.1)
             pass                                # stop operation
-            print(f'Watch dog thread stopped')
+            print_log(f'Watch dog thread stopped')
         except Exception as e:
-            print(f'Error in watch dog thread: {e}')
+            print_log(f'Error in watch dog thread: {e}')
             _status = False
 
         self.__wd_stop.clear()

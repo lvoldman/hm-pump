@@ -5,6 +5,9 @@ import sys
 from PySide6 import QtCore, QtWidgets, QtGui
 from servo_motor import servoMotor, servoParameters
 from serial_scale  import serialScale, serialScaleStub
+from common_utils import print_err, print_DEBUG, print_warn, print_log, exptTrace, print_trace, \
+                        print_call_stack
+
 
 
 
@@ -28,58 +31,80 @@ class MotorWorker(QtCore.QObject):
     stateChanged = QtCore.Signal(str)              # MotorState value string
     telemetryChanged = QtCore.Signal(dict)
     error = QtCore.Signal(str)
+    finished = QtCore.Signal()                    # emitted when worker is finished / being deleted 
 
     def __init__(self):
         super().__init__()
-        self._motor: servoMotor | None = None
-        self._sn: str | None = None
-        self._state: MotorState = MotorState.DISCONNECTED
-        self._elapsed_accum: float = 0.0
-        self._segment_start: float | None = None
-        self._elapsed_timer = QtCore.QTimer()
-        self._elapsed_timer.setInterval(100)  # ms
-        self._elapsed_timer.timeout.connect(self._emit_elapsed)
-        self._last_cmd: tuple[str, tuple, dict] | None = None  # (name, args, kwargs)
+        self._motor: servoMotor | None = None               # servoMotor instance
+        self._sn: str | None = None                     # serial number of connected motor
+        self._state: MotorState = MotorState.DISCONNECTED       # current motor state
+        self._elapsed_accum: float = 0.0               # accumulated elapsed time
+        self._segment_start: float | None = None       # start time of current segment
+        
+        # Elapsed time timer
+        self._elapsed_timer = QtCore.QTimer()           # timer for elapsed time updates
+        self._elapsed_timer.setInterval(100)  # ms            # update every 0.1 second
+        self._elapsed_timer.timeout.connect(self._emit_elapsed)     # connect timer to emit elapsed time
 
+        self._last_cmd: tuple[str, tuple, dict] | None = None  # (name, args, kwargs) used for resume
+        print_log("MotorWorker initialized")
+
+    # ---- External API ----
+    # connect to motor by serial number (selected in GUI) motorSelected -> connect_motor
     @QtCore.Slot(str)
     def connect_motor(self, sn: str) -> None:
         try:
-            if self._motor and (not sn or "not selected" in sn):
+            if self._motor and (not sn or "not selected" in sn): # i.e. user deselected motor
+                print_log(f'Deselecting motor {self._sn}, new selection: {sn}')
                 self.disconnect_motor()
                 return
-            if self._motor and not (self._sn == sn):
+            if self._motor and not (self._sn == sn):        # different motor selected
                 self.disconnect_motor()
+            else:
+                if self._motor and (self._sn == sn):        # already connected to this motor
+                    print_log(f'Already connected to motor {sn}')
+                    self.connectedChanged.emit(True)        # already connected to this motor -> on_motor_connected
+                    return
 
-            # NOTE: servoMotor currently has no real connect-by-SN; we keep SN for future integration.
-            self._motor = servoMotor(serial_number=sn)
-            self._sn = sn
-            self._set_state(MotorState.IDLE)
-            self.connectedChanged.emit(True)
+            # connect to new motor
+            print_log(f'Changing motor from {self._sn} to {sn}')
+            self._motor = servoMotor(serial_number=sn)      # create servoMotor instance
+            self._sn = sn                               # store serial number
+            self._set_state(MotorState.IDLE)            # set initial state
+            self.connectedChanged.emit(True)         # emit connected signal connectedChanged -> on_motor_connected
+            print_log(f"MotorWorker connected to motor SN={sn}")
         except Exception as ex:
-            self._motor = None
-            self._sn = None
-            self._set_state(MotorState.ERROR)
-            self.connectedChanged.emit(False)
-            self.error.emit(f"Motor connect failed: {ex}")
+            print_err(f"Motor connect exception: {ex}")
+            exptTrace(ex)
+            if self._motor:                         # clean up on failure
+                del self._motor
+            self._motor = None       # clear motor on failure   
+            self._sn = None     # clear serial number
+            self._set_state(MotorState.ERROR)    # set error state
+            self.connectedChanged.emit(False)   # emit disconnected signal
+            self.error.emit(f"Motor connect failed: {ex}")      #
 
     @QtCore.Slot()
     def disconnect_motor(self) -> None:
         try:
-            self._stop_elapsed()
+            self._stop_elapsed()           # stop elapsed timer
             if self._motor:
-                self._motor.stop()
-                del self._motor
+                self._motor.stop()   # stop motor if running and other cleanup    
+                del self._motor     # delete servoMotor instance
             self._motor = None
             self._sn = None
-            self.connectedChanged.emit(False)
+            self.connectedChanged.emit(False)       # emit disconnected signal connectedChanged -> on_motor_connected
+            print_log(f"MotorWorker disconnected from motor SN={self._sn}")
             self._set_state(MotorState.DISCONNECTED)
         except Exception as ex:
+            print_err(f"Motor disconnect exception: {ex}")
             self.error.emit(f"Motor disconnect failed: {ex}")
 
     @QtCore.Slot(dict)
     def move_abs(self, payload: dict) -> None:
-        # _unused kept for signature stability
+        print_log(f'[{self._sn}]MotorWorker move_abs called in state {self._state}, arg={payload}')
         if not self._motor:
+            print_err(f"[{self._sn}] Motor move_abs called but motor not connected, motor = {self._motor}")
             self.error.emit("Motor not connected")
             return
         try:
@@ -96,26 +121,36 @@ class MotorWorker(QtCore.QObject):
                 timeout=(timeout if timeout_enabled else None),
             )
             self._last_cmd = ("move_abs", (position, velocity, acceleration, timeout, timeout_enabled), {})
-            ok = self._motor.go2pos(position, parms)
-            if ok is False:
+                                                        # store last command for resume
+            ok = self._motor.go2pos(position, parms)   # issue move command
+            if ok is False:                             # check for failure
+                print_err(f'[{self._sn}] Motor move_abs command failed for position={position}, vel={velocity}, accel={acceleration}')
                 self._set_state(MotorState.ERROR)
                 self.error.emit("Motor move_abs command failed")
                 return
-            self._start_elapsed(reset=True)
-            self._set_state(MotorState.RUNNING)
-            self._emit_telemetry({"cmd": "move_abs", "pos": position, "vel": velocity, "accel": acceleration})
+            print_log(f'[{self._sn}] MotorWorker move_abs command issued to position {position}, timer started, waiting for completion')
+            self._start_elapsed(reset=True)         # start elapsed timer
+            self._set_state(MotorState.RUNNING)     # set state to RUNNING
+            self._emit_telemetry({"cmd": "move_abs", "position": position, "vel": velocity, "accel": acceleration})
             # Wait for completion in this worker thread (blocking OK here)
             self._wait_for_completion()
+            print_log(f'[{self._sn}]MotorWorker move_abs completed')
         except Exception as ex:
+            print_err(f"[{self._sn}] Motor move_abs exception: {ex}")
+            exptTrace(ex)
             self._set_state(MotorState.ERROR)
+            print_err(f"[{self._sn}] Motor move_abs exception: {ex}")
             self.error.emit(f"Motor move_abs exception: {ex}")
 
     @QtCore.Slot(int, dict)
     def jog(self, direction: int, payload: dict) -> None:
+        print_log(f'[{self._sn}]MotorWorker jog called in state {self._state}, direction={direction}, arg={payload}')
         if not self._motor:
+            print_err(f"[{self._sn}] Motor jog called but motor not connected, motor = {self._motor}")
             self.error.emit("Motor not connected")
             return
         try:
+            print_log(f'[{self._sn}]MotorWorker jog called in state {self._state}, direction={direction}, arg={payload}')
             velocity = float(payload.get('velocity', 0.0))
             acceleration = float(payload.get('acceleration', 0.0))
             timeout_enabled = bool(payload.get('timeout_enabled', False))
@@ -134,27 +169,40 @@ class MotorWorker(QtCore.QObject):
                 ok = self._motor.backward(parms)
                 cmd = "backward"
             if ok is False:
+                print_err(f"[{self._sn}] Motor {cmd} command failed")
                 self._set_state(MotorState.ERROR)
                 self.error.emit(f"Motor {cmd} command failed")
                 return
+            print_log(f'[{self._sn}] MotorWorker jog command issued, timer started, waiting for completion')
             self._start_elapsed(reset=True)
             self._set_state(MotorState.RUNNING)
-            self._emit_telemetry({"cmd": cmd, "vel": velocity, "accel": acceleration})
+            self._emit_telemetry({"cmd": cmd, "vel": velocity, "accel": acceleration, "position": self._motor.position if self._motor else None})
             self._wait_for_completion()
+            print_log(f'[{self._sn}]MotorWorker jog completed')
         except Exception as ex:
+            print_err(f"[{self._sn}] Motor jog exception: {ex}")
+            exptTrace(ex)
             self._set_state(MotorState.ERROR)
+            print_err(f"[{self._sn}] Motor jog exception: {ex}")
             self.error.emit(f"Motor jog exception: {ex}")
 
     @QtCore.Slot()
     def stop(self) -> None:
+        print_log(f'[{self._sn}]MotorWorker stop called in state {self._state}')
         if not self._motor:
+            print_err(f"Motor stop called but motor not connected, motor = {self._motor}")
+            self.error.emit("Motor not connected")
             return
         try:
             self._motor.stop()
             self._stop_elapsed()
             self._set_state(MotorState.IDLE)
             self._emit_telemetry({"cmd": "stop"})
+            print_log(f'[{self._sn}]MotorWorker stop completed')
         except Exception as ex:
+            print_err(f"[{self._sn}] Motor stop exception: {ex}")
+            exptTrace(ex)
+            print_err(f"[{self._sn}] Motor stop exception: {ex}")
             self._set_state(MotorState.ERROR)
             self.error.emit(f"Motor stop exception: {ex}")
 
@@ -163,6 +211,8 @@ class MotorWorker(QtCore.QObject):
         # For now, we implement pause as stop + state=PAUSED.
         # Later, if hardware supports true pause, this method will change.
         if not self._motor:
+            print_err(f"[{self._sn}] Motor pause called but motor not connected, motor = {self._motor}")
+            self.error.emit("Motor not connected")
             return
         try:
             self._motor.stop()
@@ -170,6 +220,8 @@ class MotorWorker(QtCore.QObject):
             self._set_state(MotorState.PAUSED)
             self._emit_telemetry({"cmd": "pause"})
         except Exception as ex:
+            print_err(f"[{self._sn}] Motor pause exception: {ex}")
+            exptTrace(ex)
             self._set_state(MotorState.ERROR)
             self.error.emit(f"Motor pause exception: {ex}")
 
@@ -177,8 +229,11 @@ class MotorWorker(QtCore.QObject):
     def resume(self) -> None:
         # Best-effort resume: re-issue last command if available.
         if not self._motor:
+            print_err(f"[{self._sn}] Motor resume called but motor not connected, motor = {self._motor}")
+            self.error.emit("Motor not connected")
             return
         if not self._last_cmd:
+            print_err(f"[{self._sn}] Nothing to resume. No last command stored.")
             self.error.emit("Nothing to resume")
             return
         name, args, kwargs = self._last_cmd
@@ -192,7 +247,10 @@ class MotorWorker(QtCore.QObject):
                 self.jog(direction, {"velocity": velocity, "acceleration": acceleration, "timeout": timeout, "timeout_enabled": timeout_enabled})
                 return
         except Exception as ex:
+            print_err(f"[{self._sn}] Motor resume exception: {ex}")
+            exptTrace(ex)
             self._set_state(MotorState.ERROR)
+            print_err(f"Motor resume exception: {ex}")
             self.error.emit(f"Motor resume exception: {ex}")
 
     # ---- internal helpers ----
@@ -207,9 +265,12 @@ class MotorWorker(QtCore.QObject):
             if status:
                 self._set_state(MotorState.IDLE)
             else:
+                print_err(f"Motor operation failed / timed out. Got motor notification: {status}")
                 self._set_state(MotorState.ERROR)
                 self.error.emit("Motor operation failed / timed out")
         except Exception as ex:
+            print_err(f"[{self._sn}] Motor completion wait failed: {ex}")
+            exptTrace(ex)
             self._stop_elapsed()
             self._set_state(MotorState.ERROR)
             self.error.emit(f"Motor completion wait failed: {ex}")
@@ -222,6 +283,7 @@ class MotorWorker(QtCore.QObject):
         d2 = dict(d)
         d2["motor_sn"] = self._sn
         d2["state"] = self._state.value
+        d2["position"] = self._motor.position if self._motor else None
         self.telemetryChanged.emit(d2)
 
     def _start_elapsed(self, reset: bool) -> None:
@@ -244,7 +306,7 @@ class MotorWorker(QtCore.QObject):
         elapsed = self._elapsed_accum
         if self._segment_start is not None:
             elapsed += time.time() - self._segment_start
-        self.telemetryChanged.emit({"elapsed_s": elapsed, "motor_sn": self._sn, "state": self._state.value})
+        self.telemetryChanged.emit({"elapsed_s": elapsed, "motor_sn": self._sn, "state": self._state.value, "position": self._motor.position if self._motor else None})
 
     @QtCore.Slot(bool)
     def pause_toggle(self, pause: bool) -> None:
@@ -262,15 +324,18 @@ class MotorWorker(QtCore.QObject):
                 # best-effort "resume": if you have a stored last command, re-issue it
                 # For now just mark RUNNING only if you actually restarted motion.
                 self.stateChanged.emit("RUNNING")
-        except Exception as e:
-            self.error.emit(f"pause_toggle failed: {e}")
+        except Exception as ex:
+            print_err(f"Motor pause_toggle exception: {ex}")
+            exptTrace(ex)
+            self.error.emit(f"pause_toggle failed: {ex}")
             self.stateChanged.emit("ERROR")
 
 
 class ScaleWorker(QtCore.QObject):
-    connectedChanged = QtCore.Signal(bool)
+    connectedChanged = QtCore.Signal(bool)    # changed connection state: connected / disconnected -> on_scale_connected
     telemetryChanged = QtCore.Signal(dict)
     error = QtCore.Signal(str)
+    finished = QtCore.Signal()                    # emitted when worker is finished / being deleted
 
     def __init__(self):
         super().__init__()
@@ -291,14 +356,16 @@ class ScaleWorker(QtCore.QObject):
             # self._scale = serialScale(port, poll_interval=self._poll_interval)
             self._scale = serialScaleStub(port, poll_interval=self._poll_interval)
             ok = self._scale.connect()
-            self.connectedChanged.emit(bool(ok))
+            self.connectedChanged.emit(bool(ok))      # connectedChanged -> on_scale_connected
             if ok:
                 self._restart_timer()
                 self.telemetryChanged.emit({"scale_port": self._port, "connected": True})
             else:
                 self.telemetryChanged.emit({"scale_port": self._port, "connected": False})
         except Exception as ex:
-            self.connectedChanged.emit(False)
+            print_err(f"Scale connect exception: {ex}")
+            exptTrace(ex)
+            self.connectedChanged.emit(False)    # connectedChanged -> on_scale_connected
             self.error.emit(f"Scale connect failed: {ex}")
 
     @QtCore.Slot()
@@ -309,9 +376,11 @@ class ScaleWorker(QtCore.QObject):
                 self._scale.disconnect()
             self._scale = None
             self._port = None
-            self.connectedChanged.emit(False)
+            self.connectedChanged.emit(False)    # connectedChanged -> on_scale_connected
             self.telemetryChanged.emit({"connected": False})
         except Exception as ex:
+            print_err(f"Scale disconnect exception: {ex}")
+            exptTrace(ex)
             self.error.emit(f"Scale disconnect failed: {ex}")
 
     @QtCore.Slot(float)
@@ -339,6 +408,8 @@ class ScaleWorker(QtCore.QObject):
             self.telemetryChanged.emit({"weight": w, "scale_port": self._port})
             self._restart_timer()                                       # for next poll   
         except Exception as ex:
+            print_err(f"Scale poll error: {ex}")
+            exptTrace(ex)
             self.error.emit(f"Scale poll error: {ex}")
 
 # -----------------------------
@@ -362,7 +433,9 @@ class StatusLamp(QtWidgets.QFrame):
         # re-polish so stylesheet applies immediately
         self.style().unpolish(self)                         # remove old style
         self.style().polish(self)                           # apply new style
-        self.update()                                       # trigger repaint 
+        self.update()                        
+        # if state == "err":
+        #     print_call_stack()     
 
 
 # -----------------------------
@@ -498,8 +571,20 @@ class MotorPanel(QtWidgets.QGroupBox):
         self.running_time.setMinimumWidth(180)
         self.running_time.setFixedHeight(34)
 
+        self.current_position = QtWidgets.QLineEdit()
+        self.current_position.setReadOnly(True)
+        self.current_position.setPlaceholderText("position")
+        self.current_position.setMinimumWidth(180)
+        self.current_position.setFixedHeight(34)
+
+
         row_time.addWidget(QtWidgets.QLabel("Running time:"))
         row_time.addWidget(self.running_time)
+        row_time.addSpacing(20)
+
+        row_time.addWidget(QtWidgets.QLabel("Current position:"))
+        row_time.addWidget(self.current_position)
+
         row_time.addStretch(1)
 
 
@@ -557,7 +642,9 @@ class MotorPanel(QtWidgets.QGroupBox):
         self.btn_pause.clicked.connect(self._on_pause_clicked)
         self.btn_stop.clicked.connect(self._on_stop_clicked)
         self.btn_reset_time.clicked.connect(self._reset_running_time)
-        self.motor_select.currentTextChanged.connect(self._on_motor_selected)
+        # self.motor_select.currentTextChanged.connect(self._on_motor_selected)
+        # self.motor_select.currentIndexChanged[str].connect(self._on_motor_selected)
+        self.motor_select.textActivated.connect(self._on_motor_selected)
         
         # initial status
         self.set_motor_status("off", "OFF")
@@ -566,6 +653,8 @@ class MotorPanel(QtWidgets.QGroupBox):
 
     def _on_motor_selected(self, sn: str) -> None:
         # GUI-only for now
+        print_DEBUG(f"Motor selected: {sn}")
+        self.motorSelected.emit(sn)
         if sn and "not selected" not in sn:
             self.set_motor_status("warn", f"SELECTED {sn}")
         else:
@@ -581,7 +670,8 @@ class MotorPanel(QtWidgets.QGroupBox):
     def set_motor_status(self, lamp_state: str, text: str) -> None:
         self.motor_lamp.set_state(lamp_state)
         self.motor_status_text.setText(text)
-        print(f"Motor status set to: {lamp_state} / {text}")
+        print_DEBUG(f"Motor status set to: {lamp_state} / {text}")
+
 
     def _on_move_abs_clicked(self) -> None:
         payload = {
@@ -594,9 +684,10 @@ class MotorPanel(QtWidgets.QGroupBox):
         self.moveAbsRequested.emit(payload)
 
     def _on_stop_clicked(self) -> None:
+        print_log(f"[{self.motor_select.currentText()}] Stop button clicked")
         # Stop motor (request) and reset Pause button state
         self.stopRequested.emit()
-        self.btn_pause.setText("Pause")
+        self.btn_pause.setText("Stop")
         # UI hint; real state will come from worker
         self.set_motor_status("warn", "STOP REQUESTED")
 
@@ -626,7 +717,8 @@ class MotorPanel(QtWidgets.QGroupBox):
             self.set_motor_status("ok", "IDLE")
         else:
             self.set_motor_status("off", "DISCONNECTED")
-            self.running_time.setText("0.00")  # по желанию
+            self.running_time.setText("0.00")  #  reset running time on disconnect
+            print_log("Motor disconnected")
 
     @QtCore.Slot(str)
     def on_motor_state(self, st: str) -> None:
@@ -642,12 +734,16 @@ class MotorPanel(QtWidgets.QGroupBox):
         else:
             self.set_motor_status("off", st_u or "UNKNOWN")
 
-    @QtCore.Slot(dict)
-    def on_motor_telemetry(self, t: dict) -> None:
-        if not t:
-            return
-        if "elapsed_s" in t:
-            self.running_time.setText(f"{float(t['elapsed_s']):.2f}")
+    # @QtCore.Slot(dict)
+    # def on_motor_telemetry(self, t: dict) -> None:
+    #     if not t:
+    #         return
+    #     if "elapsed_s" in t:
+    #         self.running_time.setText(f"{float(t['elapsed_s']):.2f}")
+
+    @QtCore.Slot(float)
+    def set_current_position(self, pos: float) -> None:
+        self.current_position.setText(f"{pos:.4f}")
 
     def set_motor_list(self, sns: list[str]) -> None:
         """Call this later with servoMotor.listMotors()->list[str]."""
@@ -940,26 +1036,33 @@ class LogPanel(QtWidgets.QWidget):
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Panel GUI (PySide6) — Prototype")
-        self.resize(1000, 650)
-        self._apply_scada_style()
-        self._build_ui()
-        self._init_workers()
+        try:
+            super().__init__()
+            self.setWindowTitle("Panel GUI (PySide6) — Prototype")
+            self.resize(1000, 650)
+            self._apply_scada_style()
+            self._build_ui()
+            self._init_workers()
+        
 
-        print("motor_worker.thread =", self.motor_worker.thread())
-        print("motor_thread        =", self.motor_thread)
+            print_DEBUG(f"motor_worker.thread = {self.motor_worker.thread()}")
+            print_DEBUG(f"motor_thread        = {self.motor_thread}")
 
-#  --- GUI-only periodic logging ---
-        self._log_timer = QtCore.QTimer(self)
-        self._log_timer.timeout.connect(self._append_log_sample)
-        self._log_timer.start(int(self.log_tab.resolution.value() * 1000))
+    #  --- GUI-only periodic logging ---
+            self._log_timer = QtCore.QTimer(self)
+            self._log_timer.timeout.connect(self._append_log_sample)
+            self._log_timer.start(int(self.log_tab.resolution.value() * 1000))
 
-        self.log_tab.resolutionChanged.connect(self._on_log_resolution_changed)
+            self.log_tab.resolutionChanged.connect(self._on_log_resolution_changed)
 
-        self.motor_panel.set_motor_list(servoMotor.listMotors())
-        # self.wp_panel.set_scale_list(serialScale.listScales())
-        self.wp_panel.set_scale_list(serialScaleStub.listScales())
+            self.motor_panel.set_motor_list(servoMotor.listMotors())
+            # self.wp_panel.set_scale_list(serialScale.listScales())
+            self.wp_panel.set_scale_list(serialScaleStub.listScales())
+
+        except Exception as ex:
+            print_err(f"MainWindow init exception: {ex}")
+            exptTrace(ex)
+            raise(ex)
 
     def _on_log_resolution_changed(self, seconds: float) -> None:
         ms = max(100, int(seconds * 1000))
@@ -1286,38 +1389,51 @@ QPlainTextEdit {
 
     def _init_workers(self) -> None:
     # --- Motor worker thread ---
-        self.motor_thread = QtCore.QThread(self)
-        self.motor_worker = MotorWorker()
-        self.motor_worker.moveToThread(self.motor_thread)
-        self.motor_thread.start()
+        try:
+            self.motor_thread = QtCore.QThread()
+            self.motor_thread.setObjectName("MotorWorkerThread")
+            self.motor_worker = MotorWorker()
+            self.motor_worker.moveToThread(self.motor_thread)
+            self.motor_thread.start()
+            self.motor_worker.finished.connect(self.motor_thread.quit)    # stop thread on finish
+            self.motor_worker.finished.connect(self.motor_worker.deleteLater) # delete worker on finish
+            self.motor_thread.finished.connect(self.motor_thread.deleteLater) # delete thread on finish
 
-        # --- Scale worker thread ---
-        self.scale_thread = QtCore.QThread(self)
-        self.scale_worker = ScaleWorker()
-        self.scale_worker.moveToThread(self.scale_thread)
-        self.scale_thread.start()
+            # --- Scale worker thread ---
+            self.scale_thread = QtCore.QThread()
+            self.scale_thread.setObjectName("ScaleWorkerThread")
+            self.scale_worker = ScaleWorker()
+            self.scale_worker.moveToThread(self.scale_thread)
+            self.scale_thread.start()
+            self.scale_worker.finished.connect(self.scale_thread.quit)    # stop thread on finish
+            self.scale_worker.finished.connect(self.scale_worker.deleteLater) # delete worker on finish
+            self.scale_thread.finished.connect(self.scale_thread.deleteLater) # delete thread on finish
 
-        # --- Wire GUI -> workers (requests) ---
-        self.motor_panel.motorSelected.connect(self.motor_worker.connect_motor)
-        self.motor_panel.moveAbsRequested.connect(self.motor_worker.move_abs)
-        self.motor_panel.jogRequested.connect(self.motor_worker.jog)
-        self.motor_panel.stopRequested.connect(self.motor_worker.stop)
-        self.motor_panel.pauseToggled.connect(self.motor_worker.pause_toggle)
+            # --- Wire GUI -> workers (requests) ---
+            self.motor_panel.motorSelected.connect(self.motor_worker.connect_motor)
+            self.motor_panel.moveAbsRequested.connect(self.motor_worker.move_abs)
+            self.motor_panel.jogRequested.connect(self.motor_worker.jog)
+            self.motor_panel.stopRequested.connect(self.motor_worker.stop)
+            self.motor_panel.pauseToggled.connect(self.motor_worker.pause_toggle)
 
-        self.wp_panel.scaleSelected.connect(self.scale_worker.connect_scale)
-        self.wp_panel.pollIntervalChanged.connect(self.scale_worker.set_poll_interval)
-        self.wp_panel.zeroRequested.connect(self.scale_worker.zero)
+            self.wp_panel.scaleSelected.connect(self.scale_worker.connect_scale)
+            self.wp_panel.pollIntervalChanged.connect(self.scale_worker.set_poll_interval)
+            self.wp_panel.zeroRequested.connect(self.scale_worker.zero)
 
-        # --- Wire workers -> GUI (telemetry/status) ---
-        self.motor_worker.connectedChanged.connect(self.motor_panel.on_motor_connected)
-        self.motor_worker.stateChanged.connect(self.motor_panel.on_motor_state)
-        self.motor_worker.telemetryChanged.connect(self.on_motor_telemetry)
-        self.motor_worker.error.connect(self.on_motor_error)
+            # --- Wire workers -> GUI (telemetry/status) ---
+            self.motor_worker.connectedChanged.connect(self.motor_panel.on_motor_connected)
+            self.motor_worker.stateChanged.connect(self.motor_panel.on_motor_state)
+            self.motor_worker.telemetryChanged.connect(self.on_motor_telemetry)
+            self.motor_worker.error.connect(self.on_motor_error)
 
-        self.scale_worker.connectedChanged.connect(self.wp_panel.on_scale_connected)
-        self.scale_worker.telemetryChanged.connect(self.on_scale_telemetry)
-        self.scale_worker.error.connect(self.on_scale_error)
-
+            self.scale_worker.connectedChanged.connect(self.wp_panel.on_scale_connected)
+            self.scale_worker.telemetryChanged.connect(self.on_scale_telemetry)
+            self.scale_worker.error.connect(self.on_scale_error)
+        except Exception as ex:
+            print_err(f"MainWindow _init_workers exception: {ex}")
+            exptTrace(ex)
+            raise(ex)
+        
     @QtCore.Slot(dict)
     def on_motor_telemetry(self, tel: dict) -> None:
         # expected keys: elapsed_s, position, velocity, acceleration, etc.
@@ -1327,6 +1443,11 @@ QPlainTextEdit {
             try:
                 sec = float(tel["elapsed_s"])
                 self.motor_panel.running_time.setText(f"{sec:.2f}")
+            except Exception:
+                pass
+        if "position" in tel and tel["position"] is not None:
+            try:
+                self.motor_panel.set_current_position(float(tel["position"]))
             except Exception:
                 pass
 
@@ -1368,19 +1489,20 @@ QPlainTextEdit {
 def main():
     try:
         app = QtWidgets.QApplication(sys.argv)
-        print(f"Starting SCADA GUI application.... argv={sys.argv}")
+        print_log(f"Starting SCADA GUI application.... argv={sys.argv}")
         app.setStyle("Fusion")
         w = MainWindow()
         w.show()
     except KeyboardInterrupt:
-        print("SCADA GUI application interrupted by user.")
+        print_err("SCADA GUI application interrupted by user.")
         sys.exit(0)
 
     except Exception as ex:
-        print(f"ERROR starting SCADA GUI application. Exception: {ex} of type: {type(ex)}.")
+        print_err(f"ERROR starting SCADA GUI application. Exception: {ex} of type: {type(ex)}.")
+        exptTrace(ex)
         sys.exit(1)
     _exit_code = app.exec()
-    print(f"SCADA GUI application exited with code {_exit_code}.")
+    print_log(f"SCADA GUI application exited with code {_exit_code}.")
     sys.exit(_exit_code)
 
 
