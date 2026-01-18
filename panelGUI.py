@@ -1059,8 +1059,8 @@ QLineEdit, QDoubleSpinBox {
     padding: 6px 8px;
     selection-background-color: #9bb7df;
 }
+
 QComboBox {
-    background: #ffffff;
     border: 1px solid #b9c0cb;
     border-radius: 4px;
     padding: 6px 8px;
@@ -1068,22 +1068,16 @@ QComboBox {
     min-height: 32px;
 }
 QComboBox:focus {
-                           
     border: 2px solid #4c84c7;
-    padding: 5px 7px;
+    padding: 6px 8px;
     font-size: 16px;
     min-height: 32px;
-
 }
+                           
 QComboBox QAbstractItemView {
     font-size: 14px;
 }
-
-QComboBox QAbstractItemView::item {
-    height: 24px;
-}
-
-
+                           
 QLineEdit:read-only {
     background: #f3f6fa;
     color: #3a404b;
