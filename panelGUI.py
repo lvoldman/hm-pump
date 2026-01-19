@@ -4,7 +4,7 @@ import sys
 
 from PySide6 import QtCore, QtWidgets, QtGui
 from servo_motor import servoMotor, servoParameters
-from serial_scale  import serialScale, serialScaleStub
+from WLCscale  import serialScale, serialScaleStub
 from common_utils import print_err, print_DEBUG, print_warn, print_log, exptTrace, print_trace, \
                         print_call_stack
 

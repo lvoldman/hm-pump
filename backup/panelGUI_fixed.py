@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from PySide6 import QtCore, QtWidgets, QtGui
 from servo_motor import servoMotor, servoParameters
-from serial_scale  import serialScale
+from WLCscale  import serialScale
 
 
 # -----------------------------
