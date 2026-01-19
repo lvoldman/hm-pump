@@ -113,6 +113,7 @@ class servoMotor:
         return True
     
     def stop(self)->bool:                               # atomic stop operation (no watchdog)
+        print_log(f'Stopping motor {self.serial_number}')
         self.__wd_stop.set()                      # Signal watchdog thread to stop
         try:
             self.__motor.mDev_stop()
