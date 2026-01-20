@@ -105,7 +105,10 @@ class WLCscale:
                 self.__current_weight = self.read_weight()  
                 pass                                # Monitor operation status
                                 
-                time.sleep(self.__poll_interval)
+
+                if self.__wd_stop.wait(float(self.__poll_interval)):
+                    break
+                # time.sleep(self.__poll_interval)
         except Exception as e:
             print_err(f'Error in watch dog thread: {e}')
             exptTrace(e)

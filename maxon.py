@@ -922,7 +922,7 @@ class MAXON_Motor:
 
     def  mDev_watch_dog(self):
         # self.start_time = time.time()
-        self.wd = threading.Thread(target=self.mDev_watch_dog_thread)
+        self.wd = threading.Thread(target=self.mDev_watch_dog_thread, daemon=True)
         self.wd.start()
         return self.wd
 
@@ -1378,7 +1378,7 @@ class MAXON_Motor_Stub:
 
     def  mDev_watch_dog(self):
         # self.start_time = time.time()
-        self.wd = threading.Thread(target=self.mDev_watch_dog_thread)
+        self.wd = threading.Thread(target=self.mDev_watch_dog_thread, daemon=True)
         self.wd.start()
         return self.wd
 
