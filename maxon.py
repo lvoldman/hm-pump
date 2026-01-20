@@ -1146,7 +1146,7 @@ class MAXON_Motor:
 
         return True
     
-    def  mDev_backwrd(self, velocity = None, acceleration = None, deceleration = None, timeout=None, polarity:bool=None, stall = None)->bool:
+    def  mDev_backward(self, velocity = None, acceleration = None, deceleration = None, timeout=None, polarity:bool=None, stall = None)->bool:
 
         if not self.mutualControl():
             return False
@@ -1334,9 +1334,11 @@ class MAXON_Motor_Stub:
 
     @staticmethod
     def init_devices(mxnDevice=b'EPOS4', mxnInterface=b'USB')->list[MAXON_Motor.portSp]:
+        print_log(f'Initializing MAXON Stub devices with Device={mxnDevice} Interface={mxnInterface}')
         return MAXON_Motor_Stub.devices
     
     def init_dev(self) -> bool:
+        print_log(f'Initializing MAXON Stub device on port {self.mDev_port}, dev = {self.devName}')
         return True
 
     def mDev_get_actual_current(self) -> int:
@@ -1344,15 +1346,30 @@ class MAXON_Motor_Stub:
         
 
     def _is_pos_reached(self, target_pos:int, ex_limit:int) -> bool:
+        print_log (f'Checking position reached on MAXON Stub port = {self.mDev_port}, dev = {self.devName}, target_pos = {target_pos}, ex_limit = {ex_limit}, current_pos = {self.mDev_pos}')
+        if abs(self.mDev_pos - target_pos) <= 10:
+            return True
         return False
         
     def  mDev_watch_dog_thread(self):
-        print_log (f'>>> WatchDogStub MAXON  started on  port = {self.mDev_port}, dev = {self.devName}, position = {self.mDev_pos}')
+        self.__stop_motion.clear()
+        self.devNotificationQ.queue.clear()
+        print_log (f'>>> WatchDogStub MAXON  started on  port = {self.mDev_port}, dev = {self.devName}, position = {self.mDev_pos}, operation = {self.__operation}')
         while (not self.__stop_motion.is_set()):
-                    if self.__operation == self.operation.fw:
-                         self.mDev_pos += 10
-                    elif self.__operation == self.operation.bw:
-                        self.mDev_pos -= 10
+            if self.__operation == self.operation.fw:
+                    self.mDev_pos += 10
+            elif self.__operation == self.operation.bw:
+                self.mDev_pos -= 10
+            elif self.__operation == self.operation.g2p:
+                if self.mDev_pos < self.new_pos:
+                    self.mDev_pos += 10
+                elif self.mDev_pos > self.new_pos:
+                    self.mDev_pos -= 10
+                else:
+                    print_log (f'<<< WatchDogStub MAXON reached position on  port = {self.mDev_port}, dev = {self.devName}, position = {self.mDev_pos}')
+                    break
+            time.sleep(0.1)
+
         self.devNotificationQ.put(True)
         self.__operation = self.operation.stop
         print_log (f'<<< WatchDogStub MAXON stopped on  port = {self.mDev_port}, dev = {self.devName}, position = {self.mDev_pos}')
@@ -1370,6 +1387,9 @@ class MAXON_Motor_Stub:
         return True
 
     def go2pos(self, new_position, velocity = None, acceleration = None, deceleration = None, stall=None)->bool:
+        print_log(f'MAXON Stub GO2POS {new_position} velocity = {velocity}, dev = {self.devName}, port = {self.mDev_port}')
+        self.__operation = self.operation.g2p
+        self.new_pos = new_position
         self.mDev_watch_dog()
         return True  
 
@@ -1377,11 +1397,13 @@ class MAXON_Motor_Stub:
         return True
 
     def  mDev_forward(self, velocity = None, acceleration = None, deceleration = None, timeout=None, polarity:bool=None, stall = None)->bool:
+        print_log(f'MAXON Stub FORWARD velocity = {velocity}, dev = {self.devName}, port = {self.mDev_port}, timeout={timeout}')
         self.__operation = self.operation.fw
         self.mDev_watch_dog()
         return True
     
     def  mDev_backward(self, velocity = None, acceleration = None, deceleration = None, timeout=None, polarity:bool = None, stall = None)-> bool:
+        print_log(f'MAXON Stub BACKWARD velocity = {velocity}, dev = {self.devName}, port = {self.mDev_port}, timeout={timeout}')
         self.__operation = self.operation.bw                    # no need watchdog for zero speed
         self.mDev_watch_dog()
         return True

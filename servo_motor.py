@@ -64,7 +64,7 @@ class servoMotor(QObject):
         self.__current_motor:MAXON_Motor.portSp | None = None    # Sp of the servo motor
         self.__wd_stop.clear()
         self.__timeout:float | None = None                  # Timeout for operations
-        self.__motor:motServo | None = None
+        self._motor:motServo | None = None
 
                     
         self._state = servoMotor.mState.OFF.value
@@ -80,20 +80,23 @@ class servoMotor(QObject):
         try:
             for m in servoMotor._motors:
                 if m.sn == self._current_sn:
-                    self.__motor = motServo(m)          # Initialize motor instance
+                    self._motor = motServo(m)          # Initialize motor instance
                     self.__current_motor = m
+                    self._state = servoMotor.mState.IDLE.value
                     break
             else:
                 raise ValueError(f'Servo motor with serial number {self._current_sn} not found')
             
-            self.__position = self.__motor.mDev_get_cur_pos()
+            self.__position = self._motor.mDev_get_cur_pos()
+            print_log(f'Servo motor {self._current_sn} initialized successfully: {self._motor }. Position={self.position}')
+
             self._watch_dog_run()
         except Exception as ex:
             print_err(f'Error initializing servo motor {self._current_sn}: {ex}')
             exptTrace(ex)
-            if self.__motor:
-                del self.__motor
-                self.__motor = None
+            if self._motor:
+                del self._motor
+                self._motor = None
 
         
     def __repr__(self):
@@ -102,12 +105,13 @@ class servoMotor(QObject):
     @Property(list, constant=True)
     def availableMotors(self):              # list of available motor serial numbers
         print_DEBUG(f'Getting available motors: {servoMotor._motors}')
-        return servoMotor._motors
+        # return servoMotor._motors  if servoMotor._motors is not None else []
+        return [str(m.sn) for m in servoMotor._motors] if servoMotor._motors else []
 
     @Property(str, notify=currentMotorChanged)
     def currentSerialNumber(self) -> str:
         print_DEBUG(f'Getting current serial number: {self._current_sn}')
-        return self._current_sn
+        return self._current_sn if self._current_sn else ""
 
     @currentSerialNumber.setter
     def currentSerialNumber(self, sn: str):
@@ -115,84 +119,103 @@ class servoMotor(QObject):
         try:
             if sn != self._current_sn:
                 self._current_sn = sn
-                del self.__motor
+                del self._motor
+                self._motor = None
+                self._state = servoMotor.mState.OFF.value
+
                 for m in servoMotor._motors:
                     if m.sn == sn:
-                        self.__motor = motServo(m)          # Initialize motor instance
+                        self._motor = motServo(m)          # Initialize motor instance
+                        self.__current_motor = m
+                        self._state = servoMotor.mState.IDLE.value 
                         break
-                    else:
-                        raise ValueError(f'Servo motor with serial number {sn} not found')
+                if self._motor is None:
+                    raise ValueError(f'Servo motor with serial number {sn} not found')
                 self.currentMotorChanged.emit()
         except Exception as ex:
+            self._state = servoMotor.mState.OFF.value
             print_err(f'Error changing current motor to {sn}: {ex}')
             exptTrace(ex)
+         
 
     @Property(int, notify=positionChanged)
     def position(self) -> int:
-        self.__position = self.__motor.mDev_get_cur_pos()
-        return self.__position
+        try:
+            if not self._motor:
+                return 0
+            self.__position = self._motor.mDev_get_cur_pos()
+        except Exception as ex:
+            print_err(f'Error getting position for motor {self._current_sn}: {ex}')
+            exptTrace(ex)
+            return 0
+        return self.__position if self._motor else 0
     
     @Property(str, notify=stateChanged)
     def state(self) -> str:
-        return self._state
+        return self._state if self._motor else servoMotor.mState.OFF.value
     
     # ----- Compatability with MotorController interface -----
-    @Slot(float, float, float, result=bool)
-    def moveAbsolute(self, position: float, vel: float, acc: float)->bool:   # Move to absolute position
+    @Slot(float, float, float, int, result=bool)
+    def moveAbsolute(self, position: float, vel: float, acc: float, timeout: int)->bool:   # Move to absolute position
                                                                         # for compatibility with MotorController
         print_log(f'Move absolute command received in MotorController for motor:{self} to position {position} with vel={vel}, acc={acc}')   
-        if not self.__motor:
+        if not self._motor:
             print_err('No motor initialized')
             return False
-        params = servoParameters(velocity=vel, acceleration=acc)
+        params = servoParameters(velocity=vel, acceleration=acc, timeout=timeout)
         self.go2pos(position, params)
         return True
     
     @Slot(result=bool)
     def stop(self)->bool:
         print_log(f'Stop command received in MotorController for motor:{self}')
-        if not self.__motor:
+        if not self._motor:
             print_err('No motor initialized')
             return False
-        print_log(f'Stop command received in MotorController for motor:{self._current_sn} // {self.__motor.mDev_SN}')
+        print_log(f'Stop command received in MotorController for motor:{self._current_sn} // {self._motor.mDev_SN}')
         self.stopMotor()
         return True
     
-    @Slot(result=bool)
-    def moveForward(self, vel: float, acc: float)->bool:
+    @Slot(float, float, int, result=bool)
+    def moveForward(self, vel: float, acc: float, timeout: int)->bool:
         print_log(f'Move forward command received in MotorController for motor:vel={vel}, acc={acc}  motor:{self}')
-        if not self.__motor:
+        if not self._motor:
             print_err('No motor initialized')
             return False
-        params = servoParameters(velocity=vel, acceleration=acc)
+        params = servoParameters(velocity=vel, acceleration=acc, timeout=timeout)
         self.forward(params)
         return True
     
-    @Slot(result=bool)
-    def moveBackward(self, vel: float, acc: float)->bool:
+    @Slot(float, float, int, result=bool)
+    def moveBackward(self, vel: float, acc: float, timeout: int)->bool:
         print_log(f'Move backward command received in MotorController for motor:vel={vel}, acc={acc}  motor:{self}')
-        if not self.__motor:
+        if not self._motor:
             print_err('No motor initialized')
             return False
-        params = servoParameters(velocity=vel, acceleration=acc)
+        params = servoParameters(velocity=vel, acceleration=acc, timeout=timeout)
         self.backward(params)
         return True
     
     
     def getPosition(self)->float:
-        if not self.__motor:
+        if not self._motor:
             return 0.0
         
         return self.position 
+    
+    @Property(bool, notify=stateChanged) # stateChanged — это тот же сигнал, что вы шлете при смене статуса
+    def isMoving(self) -> bool:
+        # return True if self._state == servoMotor.mState.RUNNING.value else False
+        return self._state == servoMotor.mState.RUNNING.value
 
     # ---------------------------------------------------------
     @Slot(result=bool)
     def home(self)->bool:
         try:
-            if not self.__motor:
+            if not self._motor:
                 print_err('No motor initialized')
                 return False    
-            self.__motor.mDev_reset_pos()
+            self._motor.mDev_reset_pos()
             print_DEBUG(f'home command issued')
             return True
         except Exception as ex:
@@ -208,7 +231,7 @@ class servoMotor(QObject):
             self._state = servoMotor.mState.RUNNING.value
             self.stateChanged.emit(self._state)
             self.__timeout = _parms.timeout
-            self.__motor.go2pos(new_position, 
+            self._motor.go2pos(new_position, 
                                 velocity=_parms.velocity,
                                 acceleration=_parms.acceleration,
                                 deceleration=_parms.deceleration,
@@ -232,7 +255,7 @@ class servoMotor(QObject):
             self._state = servoMotor.mState.RUNNING.value
             self.stateChanged.emit(self._state)
             self.__timeout = _parms.timeout
-            self.__motor.mDev_forward(velocity=_parms.velocity,
+            self._motor.mDev_forward(velocity=_parms.velocity,
                                 acceleration=_parms.acceleration,
                                 deceleration=_parms.deceleration,
                                 timeout=_parms.timeout,
@@ -254,7 +277,7 @@ class servoMotor(QObject):
             self._state = servoMotor.mState.RUNNING.value
             self.stateChanged.emit(self._state)
             self.__timeout = _parms.timeout
-            self.__motor.mDev_backward(velocity=_parms.velocity,
+            self._motor.mDev_backward(velocity=_parms.velocity,
                                   acceleration=_parms.acceleration,
                                   deceleration=_parms.deceleration,
                                   timeout=_parms.timeout,
@@ -275,8 +298,8 @@ class servoMotor(QObject):
         if self._state == servoMotor.mState.RUNNING.value:
             self.stop()
         self.__wd_stop.set()                      # Signal watchdog thread to stop
-        if self.__motor:
-            del self.__motor
+        if self._motor:
+            del self._motor
 
 
 
@@ -285,7 +308,7 @@ class servoMotor(QObject):
         print_log(f'Stopping motor {self._current_sn}')
         try:
             if _status is None:
-                _status = self.__motor.mDev_stop()
+                _status = self._motor.mDev_stop()
             # Unblock any waiters (best-effort)
             self._state = servoMotor.mState.IDLE.value
             if isValid(self):                                                   # Check if the QObject is still valid
@@ -295,7 +318,7 @@ class servoMotor(QObject):
             else:
                 print_err("Object Qt already deleted, skipping emit")
 
-            self.devNotificationQ.put(_status)         # Notify operation completion
+            # self.devNotificationQ.put(_status)         # Notify operation completion
         except Exception as ex:
             print_err(f'Error in stop: {ex}')
             exptTrace(ex)
@@ -314,15 +337,22 @@ class servoMotor(QObject):
         try:
             while not self.__wd_stop.is_set():
                 self.positionChanged.emit(self.position)                                # Monitor operation status
+                motor_exists = getattr(self, '_motor', None)    and self._motor is not None
+                if motor_exists:
+                    self.__position = self.position                                # Monitor operation status
+                else:   
+                    print_err('Motor instance no longer exists, stopping watchdog thread')
+                    time.sleep(0.5)
+                    continue
 
                 if self._state == servoMotor.mState.RUNNING.value:
-                    if self.__timeout is not None:
+                    if self.__timeout is not None and self.__timeout > 0:
                         if (time.time() - self.__start_time) > self.__timeout:
                             print_log(f'Operation timed out')
                             _status = True
                             self.stop()
-                        if self.__motor.devNotificationQ.qsize() > 0:
-                            _status = self.__motor.devNotificationQ.get()
+                        if self._motor.devNotificationQ.qsize() > 0:
+                            _status = self._motor.devNotificationQ.get()
                             print_log(f'Operation completed with status {_status}')
                             self.stop()
 

@@ -14,18 +14,19 @@ ApplicationWindow {
     title: "SCADA Control Panel"        // window title
     background:                         // custom background
         Rectangle {                     // rounded rectangle
-            color: "#0F1117"  // dark background
+            color: "#12141A"  // dark background
             border.width: 10    // border width
         }               
 
     Material.theme: Material.Dark
-    Material.primary: "#1976D2"      // blue for primary elements
-    Material.accent: "#1976D2"          // blue for accent elements
+    Material.primary: "#00E5FF"      // blue for primary elements
+    Material.accent: "#00E5FF"          // blue for accent elements
     Material.foreground: "#E0E0E0"    // light gray for text/icons
     
     RowLayout {
         anchors.fill: parent            // Fill entire window
-        spacing: 1              //  Spacing between panels
+        anchors.margins: 8
+        spacing: 2              //  Spacing between panels
 
         ScrollView {
             id: scrollView                                 //  Scrollable area
@@ -37,28 +38,24 @@ ApplicationWindow {
             Pane {
 
                 // Layout.preferredWidth: parent.width * 0.55
-                // Layout.fillHeight: true
+                Layout.fillHeight: true
                 width: parent.width           // important for horizontal alignment inside ScrollView
                 height: parent.height      // important for vertical alignment inside ScrollView
                 padding: 16                 // padding inside panel
                 Material.background: Material.CardBackground  // Material card style
 
                 Material.elevation: 4           // shadow depth 
-                background:                     // custom background
-                    Rectangle {                 // rounded rectangle
-                        anchors.fill: parent    //
-                        color: "#1E1E1E"
-                        radius: 8               // rounded corners
-                        border.color: "#333"       // border color
-                        border.width: 1        // border width
-                
+                background: Rectangle {
+                    color: "#1E222D" // Цвет "стальной пластины" [cite: 10]
+                    radius: 4
+                    border.color: "#2C323E" // Тонкая рамка [cite: 11, 14]
+                    border.width: 1
+                    
+                    // Внутренний градиент или блик сверху
                     Rectangle {
-                        anchors.fill: parent    //  fill entire panel
-                        color: "#1E1E1E"    // slightly transparent overlay
-                        opacity: 0.92       // adjust opacity for effect
-                        radius: 16         // rounded corners
-                        border.color: Qt.rgba(0.3, 0.3, 0.3, 0.6)       // border color
-                        border.width: 1     // border width 
+                        anchors.top: parent.top
+                        width: parent.width; height: 1
+                        color: "#3D4454" // Эффект фаски
                     }
                 }
 
@@ -69,12 +66,12 @@ ApplicationWindow {
                     spacing: 12                 // spacing between elements
 
                     // Motor status
-                    RowLayout {
+                    RowLayout {                                // motor status row                      
                         Label { text: "Motor Status:"; font.bold: true }        // bold label
                         Rectangle {                     // status indicator
-                            width: 18; height: 18; radius: 9  
+                            width: 18; height: 18; radius: 9                // circle shape
                             color: {
-                                switch(motorController.currentMotor?.state ?? "OFF") {
+                                switch(motorController?.state ?? "OFF") {
                                     case "RUNNING": return "#4CAF50"
                                     case "WARNING": return "#FF9800"
                                     case "ERROR":   return "#F44336"
@@ -84,39 +81,52 @@ ApplicationWindow {
                             }
                         }
                         Label {
-                            text: motorController.currentMotor?.state ?? "OFF"   // dynamic status text
+                            text: motorController?.state ?? "OFF"   // dynamic status text
                             color: "#ffffff"
                         }
                     }
 
-                    RowLayout {
+                    RowLayout {                                         // motor selection row
 
                         Label { text: "Select Motor by S/N:" }           // label for motor selection          
                         ComboBox {
                             Layout.fillWidth: false                      // fill width  
-                            model: motorController.availableMotors
-                            currentIndex: model.indexOf(motorController.currentSerialNumber)
+                            model: motorController.availableMotors      // model from MotorController
+                            enabled: !motorController.isMoving;
+                            // textRole: "serialNumber"                     // use serialNumber role for display
+                            currentIndex: model ? model.indexOf(motorController.currentSerialNumber) : -1        // set current index based on selected motor
                             onActivated: (index) => {
-                                motorController.currentSerialNumber = model[index]
+                                let selectedSn = model[index]                     // get selected serial number 
+                                if (selectedSn !== undefined) {         // check for valid selection
+                                    motorController.currentSerialNumber = selectedSn          // update selected motor in controller
+                                    console.log("Motor selected: " + selectedSn + " (index: " + index + ")")
+                                } else {
+                                    console.warn("Attempted to select undefined index: " + index)
+                                }
+
+                                // motorController.currentSerialNumber = model[index]                      // update selected motor in controller
+                                // console.log("Port selected: " + "number " + index + " " + model[index])
                             }
                             font.pixelSize: 14
                         }
                     }
 
-                    // Позиция назначения
-                    RowLayout {
-                        Label { text: "Destination position:" }
-                        TextField {
+                    //  Absolute move controls
+                    RowLayout {                     // absolute move row
+                        Label { text: "Destination position:" }     // label for destination position
+                        TextField {                                 
                             id: targetPos
-                            Layout.fillWidth: true
-                            placeholderText: "Destination position"
+                            Layout.fillWidth: true                 // fill width    
+                            placeholderText: "Destination position" // placeholder text
+                            inputMethodHints: Qt.ImhDigitsOnly      // numeric input only
                             validator: IntValidator{bottom: -100000; top: 100000}
                         }
                         Button {
                             text: "Move Absolute"
+                            enabled: !motorController.isMoving
                             onClicked: {
                                 let pos = parseInt(targetPos.text) || 0
-                                motorController.moveAbsolute(pos, velocity.value, acceleration.value)
+                                motorController.moveAbsolute(pos, velocity.value, acceleration.value, timeoutEnable.checked ? timeout.value : 0)
                             }
                         }
                     }
@@ -125,14 +135,18 @@ ApplicationWindow {
                     RowLayout {
                         spacing: 8
                         
-                        Button { text: "◀ Backward";  onClicked: { motorController.moveBackward(velocity.value, acceleration.value); console.log("Backward pressed") } }
+                        Button { text: "◀ Backward";  enabled: !motorController.isMoving; onClicked: { motorController.moveBackward(velocity.value, acceleration.value, timeoutEnable.checked ? timeout.value : 0); console.log("Backward pressed") } }
                         Button { text: "■ STOP";      highlighted: true; Material.background: Material.Red;  onClicked: { motorController.stop(); console.log("Stop pressed");}}
-                        Button { text: "Forward ▶"; onClicked: { motorController.moveForward(velocity.value, acceleration.value); console.log("Forward pressed") }}
-                        Button { text: "Home"; onClicked: { motorController.home(); console.log("Home pressed") } }
+                        Button { text: "Forward ▶"; enabled: !motorController.isMoving; onClicked: { motorController.moveForward(velocity.value, acceleration.value, timeoutEnable.checked ? timeout.value : 0); console.log("Forward pressed") }}
+                        Button { text: "Home"; enabled: !motorController.isMoving; onClicked: { motorController.home(); console.log("Home pressed") } }
                     }
 
                     GridLayout {
                         columns: 2
+                        enabled: !motorController.isMoving   // Disable while motor is moving
+                        opacity: enabled ? 1.0 : 0.5 // Visual feedback when disabled
+                        Behavior on opacity { NumberAnimation { duration: 200 } }
+
                         Label { text: "Velocity:" }
                         SpinBox { id: velocity; from: 1; to: 5000; value: 1000; editable: true }
 
@@ -142,14 +156,45 @@ ApplicationWindow {
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#444" }
 
-                    // Текущие значения
+                    // Current values
                     GridLayout {
                         columns: 2
                         Label { text: "Current position:" }
-                        TextField { readOnly: true; text: motorController.currentMotor?.position ?? "—" }
+                        // TextField { readOnly: true; text: motorController.currentMotor?.position ?? "—" }
+                        TextField { readOnly: true; text: motorController?.position ?? "—" }
 
                         Label { text: "Running time:" }
-                        TextField { readOnly: true; text: "00:00:00" }
+                        TextField { id: runtimeDisplay; readOnly: true; text: "00:00:00" }
+                    }
+
+                    Timer {
+                        id: runningTimer
+                        interval: 1000 // 1 second
+                        // running: motorController.isMoving // Timer runs while the motor is moving
+                        running: motorController.state === "RUNNING"  //
+                        repeat: true
+                        
+                        property int seconds: 0
+
+                        onTriggered: {          // Increment runtime every second
+                            seconds++;
+                            runtimeDisplay.text = formatTime(seconds);
+                        }
+                        
+                        // Reset when movement starts
+                        onRunningChanged: {         // Reset seconds when motor starts moving
+                            if (running) {
+                                 seconds = 0; 
+                                runtimeDisplay.text = "00:00:00";
+                            }
+                        }
+
+                        function formatTime(s) {
+                            let h = Math.floor(s / 3600).toString().padStart(2, '0');
+                            let m = Math.floor((s % 3600) / 60).toString().padStart(2, '0');
+                            let sec = (s % 60).toString().padStart(2, '0');
+                            return h + ":" + m + ":" + sec;
+                        }
                     }
 
                     CheckBox {
@@ -160,7 +205,7 @@ ApplicationWindow {
                     RowLayout {
                         enabled: timeoutEnable.checked
                         Label { text: "Timeout (s):" }
-                        SpinBox { from: 1; to: 3600; value: 30; editable: true }
+                        SpinBox { id: timeout; from: 1; to: 3600; value: 30; editable: true }
                     }
                 }
             }
@@ -172,6 +217,21 @@ ApplicationWindow {
         Pane {
             Layout.fillWidth: true
             Layout.fillHeight: true
+
+            background: Rectangle {
+                color: "#1E222D" // Цвет "стальной пластины" [cite: 10]
+                radius: 4
+                border.color: "#2C323E" // Тонкая рамка [cite: 11, 14]
+                border.width: 1
+                
+                // Внутренний градиент или блик сверху
+                Rectangle {
+                    anchors.top: parent.top
+                    width: parent.width; height: 1
+                    color: "#3D4454" // Эффект фаски
+                }
+            }
+
 
             ColumnLayout {
                 width: scrollView.width   // ← neccesary for horizontal alignment
@@ -202,9 +262,13 @@ ApplicationWindow {
                 }
                 Label { text: "Weight:" }
                 TextField {
+                    id: weightDisplay
                     Layout.fillWidth: true
                     readOnly: true
-                    font.pixelSize: 28
+                    color: "#00E5FF" // Neon blue color for weight display
+                    font.family: "Courier New" // Industrial style
+                    font.pixelSize: 32
+                    background: Rectangle { color: "#0A0C10"; radius: 2 }
                     horizontalAlignment: Text.AlignHCenter
                     text: scaleController.weight ? scaleController.weight.toFixed(2) + " kg" : "—"
                 }
@@ -213,8 +277,19 @@ ApplicationWindow {
                 TextField {
                     Layout.fillWidth: true
                     readOnly: true
-                    text: "Rate of Change by Weight (ROC) - Weight/Time"
-                    font.pixelSize: 16
+                    color: "#00E5FF" // Neon blue color for weight display
+                    font.family: "Courier New" // Industrial style
+                    font.pixelSize: 32
+                    background: Rectangle { color: "#0A0C10"; radius: 2 }
+                    // text: "Rate of Change by Weight (ROC) - Weight/Time"
+                    text: {
+                        if ( motorController.isMoving && scaleController.weight !== undefined && runningTimer.seconds > 0) {
+                            let power = scaleController.weight / runningTimer.seconds; // kg/s
+                            return power.toFixed(2) + " kg/s"
+                        } else {
+                            return "Rate of Change by Weight (ROC) - Weight/Time"
+                        }
+                    }
                 }
 
                 Item { Layout.fillHeight: true }
@@ -223,7 +298,14 @@ ApplicationWindow {
                     Label { text: "Poll interval (ms):" }
                     SpinBox {
                         from: 50; to: 5000; value: 100; stepSize: 50; editable: true
-                        onValueModified: scaleController.update_poll_interval(value / 1000)
+                        onValueModified:{
+                            let val = value / 1000;
+                            if (!isNaN(val) && val !== null) {
+                                scaleController.update_poll_interval(val); // convert ms to s
+                            }
+                            // scaleController.update_poll_interval(value / 1000)   // convert ms to s
+                            console.log("Poll interval updated to " + value + " ms")
+                        } 
                     }
                 }
             }

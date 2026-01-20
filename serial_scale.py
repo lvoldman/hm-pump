@@ -11,7 +11,7 @@ class serialScale(QObject):
     weightChanged = Signal(float)
     connectionChanged = Signal(bool)
     currentPortChanged = Signal()   # Signal emitted when current port changes (for compatibility)
-    _ports: list[str] | None = None
+    # _ports: list[str] | None = None
     _scales: list[str] | None = None
 
     @staticmethod
@@ -23,16 +23,20 @@ class serialScale(QObject):
         super().__init__(parent)
         self._port = serial_port if serial_port else (serialScale.listScales()[0] if serialScale.listScales() else "")
         self._weight = 0.0
-        self._connected: bool = False
-        self._poll_interval = poll_interval
-        self._scale:Scale | None = None
+        self._connected: bool = False                       # Connection status
+        self._poll_interval = poll_interval                     # Polling interval for watchdog
+        self._scale:Scale | None = None             # Scale instance
         self.__wd:threading.Thread | None = None                  # Watchdog thread
         self.__wd_stop:threading.Event = threading.Event() # Event to stop watchdog thread
-        self.__wd_stop.clear()
+        self.__wd_stop.clear()  
         self._watch_dog_run()
 
         if serialScale._scales is None:
+            print_log('Listing scales for the first time in serialScale init')
             serialScale._scales = serialScale.listScales()
+
+        self._port = serial_port if serial_port else (serialScale._scales[0] if serialScale._scales else "")
+        print_log(f'Available scales: {serialScale._scales}, requested port: {self._port}')
 
         if self._port not in serialScale._scales:
             raise ValueError(f'Serial scale with port {self._port} not found among available ports: {serialScale._scales}')
@@ -52,17 +56,16 @@ class serialScale(QObject):
     
     # ----------- Compatibility with ScaleController interface -----------
 
-    @Property(list, constant=True)
-    def availablePorts(self):              # list of available motor serial numbers
-        print_DEBUG(f'Getting available serial ports: {serialScale._scales}')
-        return serialScale._scales 
+
     
     @Property(str, notify=currentPortChanged)
     def currentSerialPort(self) -> str:
-        return self._port
+        print_DEBUG(f'Getting current serial port: {self._port}')
+        return self._port if self._port else ""
 
     @currentSerialPort.setter
     def currentSerialPort(self, port: str):
+        print_DEBUG(f'Setting current serial port from {self._port} to {port}')
         if port != self._port:
             self._port = port
             self._scale = serialScale(port)
@@ -72,19 +75,24 @@ class serialScale(QObject):
     # @Property(list, constant=True)
     @Property(list, notify=currentPortChanged)
     def availablePorts(self):              # list of available serial ports
-        return serialScale._ports
+        print_DEBUG(f'Getting available serial ports: {serialScale._scales}')
+        return serialScale._scales if serialScale._scales is not None else []
+    
+
     # -----------------------
 
     @Property(float, notify=weightChanged)
     def weight(self):
-        return self._scale.weight
+        return self._scale.weight if self._scale else 0.0   
 
     @Property(bool, notify=connectionChanged)
     def isConnected(self):
-        return self._scale.is_connected()
+        # print_DEBUG(f'Checking connection status for scale on port {self._port}: {self._scale} ->{self._scale.is_connected() if self._scale else False}')
+        return self._scale.is_connected() if self._scale else False
 
     @Slot(str)
     def update_serial_port(self, port: str):
+        print_DEBUG(f'Updating serial port to {self._port}-> {port}')
         self._port = port
         self._scale.update_serial_port(port)
         self.connectionChanged.emit(self.isConnected)
@@ -94,8 +102,8 @@ class serialScale(QObject):
         self._poll_interval = interval
         self._scale.updatePollInterval(interval)
 
-    @Slot(bool, result=bool)
-    def connect(self, dummy=True) -> bool:
+    @Slot(result=bool)
+    def connect(self) -> bool:
         self._connected = True
         self._scale.connect()
         self.connectionChanged.emit(True)

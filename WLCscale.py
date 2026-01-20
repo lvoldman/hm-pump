@@ -138,6 +138,7 @@ class WLCscaleStub:
         # Simulate weight reading with random value and
         sign = -1 if random.randint(0,1) == 0 else 1
         self.__test_weight +=  random.randint(200, 500)/100.0*sign
+        self.__test_weight = max(0.0, self.__test_weight)  # Ensure weight doesn't go below 0
         return self.__test_weight
     
     def update_serial_port(self, serial_port: str):
