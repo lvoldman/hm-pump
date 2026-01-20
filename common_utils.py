@@ -24,7 +24,8 @@ log_format = u'%(asctime)s [%(levelname)s]: %(filename)s--%(funcName)s/%(lineno)
 logging.basicConfig(format=log_format, handlers=[
             RichHandler(
                 rich_tracebacks=True,         # nice rich tracebacks in the log
-                markup=True,                  # allows using rich markup in messages
+                # markup=True,                  # allows using rich markup in messages
+                markup=False,                  # Rich fails interpret list with [] symbols in right way :-(
                 show_path=False,              # removes long file path (usually not needed)
                 console=Console(stderr=False),           # can be omitted - defaults to stdout
             ),

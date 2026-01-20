@@ -125,10 +125,10 @@ ApplicationWindow {
                     RowLayout {
                         spacing: 8
                         
-                        Button { text: "◀ Backward";  onClicked: { console.log("Backward pressed") } }
+                        Button { text: "◀ Backward";  onClicked: { motorController.moveBackward(velocity.value, acceleration.value); console.log("Backward pressed") } }
                         Button { text: "■ STOP";      highlighted: true; Material.background: Material.Red;  onClicked: { motorController.stop(); console.log("Stop pressed");}}
-                        Button { text: "Forward ▶"; onClicked: { console.log("Forward pressed") }}
-                        Button { text: "Home" }
+                        Button { text: "Forward ▶"; onClicked: { motorController.moveForward(velocity.value, acceleration.value); console.log("Forward pressed") }}
+                        Button { text: "Home"; onClicked: { motorController.home(); console.log("Home pressed") } }
                     }
 
                     GridLayout {
@@ -183,18 +183,21 @@ ApplicationWindow {
                     Label { text: "Scale Status:"; font.bold: true }
                     Rectangle {
                         width: 18; height: 18; radius: 9
-                        color: scale.isConnected ? "#4CAF50" : "#F44336"
+                        color: scaleController.isConnected ? "#4CAF50" : "#F44336"
                     }
-                    Label { text: scale.isConnected ? "CONNECTED" : "DISCONNECTED" }
+                    Label { text: scaleController.isConnected ? "CONNECTED" : "DISCONNECTED" }
                 }
                 
                 Label { text: "Select Port:" }
                 ComboBox {
                     Layout.fillWidth: true
-                    model: scale.listScales()
+                    model: scaleController.availablePorts // model from ScaleController
+                    // currentIndex: model.indexOf(scaleController.currentSerialPort)
+                    currentIndex: model ? model.indexOf(scaleController.currentSerialPort) : -1   // handle empty model case, if no scales found
                     onActivated: (index) => {
-                        scale.update_serial_port(model[index])
-                        scale.connect()
+                        scaleController.update_serial_port(model[index])
+                        scaleController.connect()
+                        console.log("Port selected: " + "number " + index + " " + model[index])
                     }
                 }
                 Label { text: "Weight:" }
@@ -203,7 +206,7 @@ ApplicationWindow {
                     readOnly: true
                     font.pixelSize: 28
                     horizontalAlignment: Text.AlignHCenter
-                    text: scale.weight.toFixed(2) + " kg"
+                    text: scaleController.weight ? scaleController.weight.toFixed(2) + " kg" : "—"
                 }
 
                 Label { text: "Power=W/T:" }
@@ -220,7 +223,7 @@ ApplicationWindow {
                     Label { text: "Poll interval (ms):" }
                     SpinBox {
                         from: 50; to: 5000; value: 100; stepSize: 50; editable: true
-                        onValueModified: scale.update_poll_interval(value / 1000)
+                        onValueModified: scaleController.update_poll_interval(value / 1000)
                     }
                 }
             }

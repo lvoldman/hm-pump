@@ -1302,6 +1302,13 @@ class MAXON_Motor:
 # Stub class for MAXON motor for unit testing without hardware
 class MAXON_Motor_Stub: 
     operation = namedtuple("operation", ["fw", "bw", "g2p", "stop"])
+    devices:list[MAXON_Motor.portSp] = [
+        MAXON_Motor.portSp('stub_dev', 'stub_protocol', 'stub_usb','stub_port', '9600', '12345', 1, 'stub_sensor'),
+        MAXON_Motor.portSp('stub_dev2', 'stub_protocol', 'stub_usb','stub_port2', '9600', '67890', 2, 'stub_sensor2')
+        ]
+    
+
+
     def __init__(self, mxnDev:MAXON_Motor.portSp):
         self.mDev_pos:int = 0                                 #  current position 
         self.wd = None                                      # watch dog identificator
@@ -1323,12 +1330,12 @@ class MAXON_Motor_Stub:
 
     @staticmethod
     def enum_devs(mxnDevice, mxnInterface)->list[MAXON_Motor.portSp]:
-        return [MAXON_Motor.portSp('stub_dev', 'stub_protocol', 'stub_usb','stub_port', '9600', '12345', 1, 'stub_sensor')]
+        return MAXON_Motor_Stub.devices
 
     @staticmethod
-    def init_devices(mxnDevice=b'EPOS4', mxnInterface=b'USB'):
-        return [MAXON_Motor.portSp('stub_dev', 'stub_protocol', 'stub_usb','stub_port', '9600', '12345', 1, 'stub_sensor')]
-
+    def init_devices(mxnDevice=b'EPOS4', mxnInterface=b'USB')->list[MAXON_Motor.portSp]:
+        return MAXON_Motor_Stub.devices
+    
     def init_dev(self) -> bool:
         return True
 

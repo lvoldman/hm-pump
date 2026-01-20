@@ -7,7 +7,6 @@ from PySide6.QtCore import QObject, Signal, Property, Slot, QUrl
 
 from dataclasses import dataclass
 from queue import Queue
-from typing import List, Optional
 
 from servo_motor import servoMotor, servoParameters
 from serial_scale import serialScale
@@ -17,12 +16,14 @@ from common_utils import print_err, print_DEBUG, print_warn, print_log, exptTrac
 
 
 # ─── Controllers for QML ────────────────────────────────
+# OBSOLETE: Use servoMotor and serialScale directly in QML
+'''
 class MotorController(QObject):
     currentMotorChanged = Signal()      # Signal emitted when current motor changes
 
     def __init__(self, parent=None):
         super().__init__(parent)                
-        self._motors: List[str] = servoMotor.listMotors()
+        self._motors: list[str] = servoMotor.listMotors()
         self._current_sn: str = self._motors[0] if self._motors else ""
         self._motor: servoMotor | None = servoMotor(self._current_sn) if self._current_sn else None
 
@@ -31,7 +32,7 @@ class MotorController(QObject):
             del self._motor
 
     @Property(list, constant=True)
-    def availableMotors(self):              # List of available motor serial numbers
+    def availableMotors(self):              # list of available motor serial numbers
         return self._motors
 
     @Property(str)
@@ -112,13 +113,14 @@ class ScaleController(QObject):
             self.currentPortChanged.emit(self._scale.isConnected if self._scale else False)
 
     @Property(list, constant=True)
-    def availablePorts(self):              # List of available serial ports
+    def availablePorts(self):              # list of available serial ports
         return self._ports
     
     def weight(self)->float:
         if not self._scale:
             return 0.0
         return self._scale.weight
+'''
 
 # ─── Запуск приложения ─────────────────────────────────────────────────────
 if __name__ == "__main__":
@@ -127,11 +129,11 @@ if __name__ == "__main__":
     engine = QQmlApplicationEngine()
 
     # Регистрируем контекстные объекты
-    motor_ctrl = MotorController()
-    scale = ScaleController()
+    motor_ctrl = servoMotor()
+    scale = serialScale()
 
     engine.rootContext().setContextProperty("motorController", motor_ctrl)
-    engine.rootContext().setContextProperty("scale", scale)
+    engine.rootContext().setContextProperty("scaleController", scale)
 
     qml_file = Path(__file__).parent / "panelQML.qml"
     engine.load(QUrl.fromLocalFile(str(qml_file)))

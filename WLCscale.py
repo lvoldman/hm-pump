@@ -38,7 +38,7 @@ class WLCscale:
             self.__serial_port = serial_port
             self.connect()
 
-    def update_poll_interval(self, poll_interval: float):
+    def updatePollInterval(self, poll_interval: float):
         print_log(f'Updating poll interval to {self.__poll_interval}-> {poll_interval}')
         self.__poll_interval = poll_interval
 
@@ -129,7 +129,6 @@ class WLCscaleStub:
         return  ["COM3", "COM4"]
     
     def __init__(self, serial_port: str, poll_interval: float = 0.1):
-        super().__init__(serial_port, poll_interval)
         self.__wd_stop:threading.Event = threading.Event() # Event to stop watchdog thread
         self.__test_weight =random.randint(200, 9500)/100.0
         self.__poll_interval = poll_interval
@@ -144,7 +143,7 @@ class WLCscaleStub:
     def update_serial_port(self, serial_port: str):
         print_log(f'Updating serial port to {self.__serial_port}-> {serial_port}')
 
-    def update_poll_interval(self, poll_interval: float):
+    def updatePollInterval(self, poll_interval: float):
         print_log(f'Updating poll interval to {self.__poll_interval}-> {poll_interval}')
 
     def connect(self)->bool:
@@ -156,6 +155,10 @@ class WLCscaleStub:
         self.__wd_stop.set()
         print_log(f'Simulated disconnection from scale on {self.__serial_port}')
         return True
+    
+    def is_connected(self)->bool:
+        return True
+    
     def __watch_dog_thread(self):
         self.__wd_stop.clear()
         try:
@@ -170,6 +173,11 @@ class WLCscaleStub:
 
     def __del__(self):
         self.disconnect()   
+
+    @property
+    def weight(self):
+        return self.read_weight()
+    
 #  =====  UNITEST  =====
 
 if __name__ == "__main__":
