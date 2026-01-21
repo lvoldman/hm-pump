@@ -135,8 +135,11 @@ ApplicationWindow {
 
                                     Label { text: "Select Motor by S/N:" }           // label for motor selection          
                                     ComboBox {
+                                        id: motorSelector
                                         Layout.fillWidth: false                      // fill width  
                                         model: motorController.availableMotors      // model from MotorController
+                                        // textRole: "sn"
+                                        // model: motorController.availableMotorObjects      // model from MotorController
                                         enabled: !motorController.isMoving;
                                         // textRole: "serialNumber"                     // use serialNumber role for display
                                         currentIndex: model ? model.indexOf(motorController.currentSerialNumber) : -1        // set current index based on selected motor
@@ -153,6 +156,18 @@ ApplicationWindow {
                                             // console.log("Port selected: " + "number " + index + " " + model[index])
                                         }
                                         font.pixelSize: 14
+                                    }
+                                    Label { text: "Current Limit (mA):" }
+                                    SpinBox { 
+                                        id: currentLimit; 
+                                        from: 1; to: 500; value: 300; editable: true 
+                                        onValueModified:{
+                                            let val = value;
+                                            if (!isNaN(val) && val !== null) {
+                                                motorController.currentLimit = val;
+                                            }
+                                            console.log("Current limit updated to " + val + " mA")
+                                        }
                                     }
                                 }
 
@@ -344,7 +359,7 @@ ApplicationWindow {
                                 border.color: "#444"
                                 Label {
                                     anchors.centerIn: parent
-                                    text: "ROC: " + (motorController.isMoving ? (scaleController.weight / runningTimer.seconds).toFixed(2) : "0.00") + " kg/s"
+                                    text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.weight / runningTimer.seconds).toFixed(2) : "0.00") + " kg/s"
                                     color: "#FFA500" // Оранжевый для производных данных
                                     font.pixelSize: 20
                                 }
@@ -400,4 +415,11 @@ ApplicationWindow {
             }
         }
     }
+    // Connections {
+    //     // Call this method from Python side to update target motor when selection changes
+    //     target: motorController.get_motor_by_index(motorSelector.currentIndex)
+
+    //     onPositionChanged: (p) => { 
+    //         console.log("Position updated to: " + p);}
+    // }
 }

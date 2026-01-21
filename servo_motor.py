@@ -9,7 +9,8 @@ from common_utils import print_err, print_DEBUG, print_warn, print_log, exptTrac
                         print_call_stack
 from shiboken6 import isValid
 
-motServo = MAXON_Motor_Stub # For testing purposes, replace with MAXON_Motor for actual implementation
+# motServo = MAXON_Motor_Stub # For testing purposes, replace with MAXON_Motor for actual implementation
+motServo = MAXON_Motor      #   For actual implementation
 
 @dataclass
 class servoParameters:
@@ -40,6 +41,8 @@ class servoMotor(QObject):
     currentMotorChanged = Signal()      # Signal emitted when current motor changes - 
                                         # NOTE: Added for consistency with MotorController
 
+    currentLimitChanged = Signal()    # Signal emitted when current limit changes
+
 
     @staticmethod
     def listMotors()->list[str]:       # List available servo motors SNs
@@ -64,6 +67,7 @@ class servoMotor(QObject):
         self.__current_motor:MAXON_Motor.portSp | None = None    # Sp of the servo motor
         self.__wd_stop.clear()
         self.__timeout:float | None = None                  # Timeout for operations
+        self.__current_limit_mA:int = 300               # Current limit in mA
         self._motor:motServo | None = None
 
                     
@@ -73,13 +77,13 @@ class servoMotor(QObject):
             print_log(f'Listing available servo motors for first time...')
 
 
-        self._current_sn = serial_number if serial_number else (servoMotor._motors[0].sn if servoMotor._motors else '') 
+        self._current_sn = serial_number if serial_number else (str(servoMotor._motors[0].sn) if servoMotor._motors else '') 
         # print_log(f'Available servo motors->{servoMotor._motors}, s/n selected={self._current_sn}')
         print_log('Available servo motors->%s, s/n selected=%s', str(servoMotor._motors), self._current_sn)
 
         try:
             for m in servoMotor._motors:
-                if m.sn == self._current_sn:
+                if str(m.sn) == self._current_sn:
                     self._motor = motServo(m)          # Initialize motor instance
                     self.__current_motor = m
                     self._state = servoMotor.mState.IDLE.value
@@ -107,11 +111,35 @@ class servoMotor(QObject):
         print_DEBUG(f'Getting available motors: {servoMotor._motors}')
         # return servoMotor._motors  if servoMotor._motors is not None else []
         return [str(m.sn) for m in servoMotor._motors] if servoMotor._motors else []
+    
+    @Property(list, constant=True)
+    def availableMotorObjects(self):              # list of available motor serial numbers
+        print_DEBUG(f'Getting available motors: {servoMotor._motors}')
+        # return servoMotor._motors  if servoMotor._motors is not None else []
+        return servoMotor._motors if servoMotor._motors else []
+
+    @Property(int, notify=currentLimitChanged)
+    def currentLimit(self) -> int:
+        print_DEBUG(f'Getting current limit: {self.__current_limit_mA} mA')
+        return self.__current_limit_mA
+
+    @currentLimit.setter
+    def currentLimit(self, limit_mA: int):  
+        print_DEBUG(f'Setting current limit from {self.__current_limit_mA} mA to {limit_mA} mA')
+        try:
+            if limit_mA != self.__current_limit_mA:
+                self.__current_limit_mA = limit_mA
+                if self._motor:
+                    self._motor.el_current_limit = self.__current_limit_mA
+                self.currentLimitChanged.emit()
+        except Exception as ex:
+            print_err(f'Error setting current limit to {limit_mA} mA: {ex}')
+            exptTrace(ex)
 
     @Property(str, notify=currentMotorChanged)
     def currentSerialNumber(self) -> str:
         print_DEBUG(f'Getting current serial number: {self._current_sn}')
-        return self._current_sn if self._current_sn else ""
+        return str(self._current_sn) if self._current_sn else ""
 
     @currentSerialNumber.setter
     def currentSerialNumber(self, sn: str):
@@ -124,7 +152,7 @@ class servoMotor(QObject):
                 self._state = servoMotor.mState.OFF.value
 
                 for m in servoMotor._motors:
-                    if m.sn == sn:
+                    if str(m.sn) == sn:
                         self._motor = motServo(m)          # Initialize motor instance
                         self.__current_motor = m
                         self._state = servoMotor.mState.IDLE.value 
@@ -153,6 +181,12 @@ class servoMotor(QObject):
     @Property(str, notify=stateChanged)
     def state(self) -> str:
         return self._state if self._motor else servoMotor.mState.OFF.value
+    
+    @Slot(int, result=QObject)
+    def get_motor_by_index(self, index):
+        _selected_motor: MAXON_Motor.portSp = self._motors[index] if self._motors and 0 <= index < len(self._motors) else None
+        print_DEBUG(f'Getting motor by index {index}: {_selected_motor}')
+        return _selected_motor
     
     # ----- Compatability with MotorController interface -----
     @Slot(float, float, float, int, result=bool)
@@ -231,7 +265,7 @@ class servoMotor(QObject):
             self._state = servoMotor.mState.RUNNING.value
             self.stateChanged.emit(self._state)
             self.__timeout = _parms.timeout
-            self._motor.go2pos(new_position, 
+            self._motor.go2pos(int(new_position) if new_position and isinstance(new_position, (int, float)) else 0, 
                                 velocity=_parms.velocity,
                                 acceleration=_parms.acceleration,
                                 deceleration=_parms.deceleration,
@@ -333,6 +367,7 @@ class servoMotor(QObject):
         
     def __watch_dog_thread(self):
         print_log(f'Watch dog thread started')
+        self.devNotificationQ.queue.clear()        # clear notification queue
         _status = True
         try:
             while not self.__wd_stop.is_set():
@@ -343,6 +378,7 @@ class servoMotor(QObject):
                 else:   
                     print_err('Motor instance no longer exists, stopping watchdog thread')
                     time.sleep(0.5)
+                    self.__wd_stop.set()
                     continue
 
                 if self._state == servoMotor.mState.RUNNING.value:
@@ -351,10 +387,10 @@ class servoMotor(QObject):
                             print_log(f'Operation timed out')
                             _status = True
                             self.stop()
-                        if self._motor.devNotificationQ.qsize() > 0:
-                            _status = self._motor.devNotificationQ.get()
-                            print_log(f'Operation completed with status {_status}')
-                            self.stop()
+                    if self._motor.devNotificationQ.qsize() > 0:
+                        _status = self._motor.devNotificationQ.get()
+                        print_log(f'Operation completed with status {_status}')
+                        self.stop()
 
                 time.sleep(0.1)
             print_log(f'Watch dog thread stopped at position {self.__position}')

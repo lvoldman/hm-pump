@@ -207,7 +207,7 @@ class MAXON_Motor:
         self.mDev_port:str = mxnDev.port                          # USB1,USB2, USB3 for USB..
         self.mDev_nodeID:int = mxnDev.nodeid                            # 1,2,3..
         self.mDev_pos:int = 0                                 #  current position 
-        self.el_current_limit:int = 0                       # electrical current limit to stop 
+        self.el_current_limit:int = self.DEFAULT_CURRENT_LIMIT                       # electrical current limit to stop 
         self.wd = None                                      # watch dog identificator
         self.mDev_SN = mxnDev.sn                                   # Serial N (0x1018:0x04)
         self.mDev_status = False                              # device status (bool) / used for succesful initiation validation
@@ -251,6 +251,7 @@ class MAXON_Motor:
 
             self.mDev_get_cur_pos()
 
+            self.init_dev()
 
             print_log(f'({self.devName}) Serial number = {self.mDev_SN} Possition = {self.mDev_pos}')
 
@@ -344,6 +345,7 @@ class MAXON_Motor:
         InterfaceName = InterfaceID
         pPortSel = create_string_buffer(MaxStrSize)
         localPortlst = list()
+        print_log(f'Getting available ports for DeviceName={DeviceName}, ProtocolStackName={ProtocolStackName}, InterfaceName={InterfaceName}, MaxStrSize={MaxStrSize}')
         MAXON_Motor.epos.VCS_GetPortNameSelection(DeviceName, ProtocolStackName, InterfaceName, True, byref(pPortSel), MaxStrSize, byref(pEndOfSelection), byref(pErrorCode))
         if pErrorCode.value == 0:
             bdRate = MAXON_Motor.getMaxBaudrate(DeviceName, ProtocolStackName, InterfaceName, pPortSel.value)
@@ -366,7 +368,7 @@ class MAXON_Motor:
                 print_err (f'ERROR getting port. Dev = {DeviceName} Protocol = {ProtocolStackName} InterfaceName = {InterfaceID} Port ... = {pPortSel.value}  , pEndOfSelection = {pEndOfSelection.value}, pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
                 break
 
-
+        print_log(f'Available ports: {localPortlst}')
         return localPortlst
 
 
@@ -378,9 +380,11 @@ class MAXON_Motor:
 
         pInterfaceNameSel = create_string_buffer(MaxStrSize)
         InterfaceLst = list()
+        print_log(f'Getting available interfaces for DeviceName={DeviceName}, ProtocolStackName={ProtocolStackName}, MaxStrSize={MaxStrSize}')
         MAXON_Motor.epos.VCS_GetInterfaceNameSelection(DeviceName, ProtocolStackName, True, byref(pInterfaceNameSel), \
                                                        MaxStrSize, byref(pEndOfSelection), byref(pErrorCode))
         if pErrorCode.value == 0:
+            print_log(f'Adding found (1) interface for Dev = {DeviceName} and Protocol{ProtocolStackName}: {pInterfaceNameSel.value}')
             InterfaceLst.append(pInterfaceNameSel.value)
         else:
             print_err (f'ERROR getting interface. Dev = {DeviceName} Protocol = {ProtocolStackName} InterfaceName (1) = {pInterfaceNameSel.value}  , pEndOfSelection = {pEndOfSelection.value}, pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
@@ -389,11 +393,12 @@ class MAXON_Motor:
             MAXON_Motor.epos.VCS_GetInterfaceNameSelection(DeviceName, ProtocolStackName, False, byref(pInterfaceNameSel), \
                                                            MaxStrSize, byref(pEndOfSelection), byref(pErrorCode))
             if pErrorCode.value == 0:
+                print_log(f'Adding found (...) interface for Dev = {DeviceName} and Protocol{ProtocolStackName}: {pInterfaceNameSel.value}') 
                 InterfaceLst.append(pInterfaceNameSel.value)
             else:
                 print_err (f'ERROR getting interface. Dev = {DeviceName} Protocol = {ProtocolStackName} InterfaceName ... = {pInterfaceNameSel.value}  , pEndOfSelection = {pEndOfSelection.value}, pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
                 break
-
+        print_log(f'Available interfaces: {InterfaceLst}')
         return InterfaceLst
 
 
@@ -405,6 +410,7 @@ class MAXON_Motor:
 
         pProtocolStackNameSel = create_string_buffer(MaxStrSize)
         protLst = list()
+        print_log(f'Getting available protocols for DeviceName={DeviceName}')
         MAXON_Motor.epos.VCS_GetProtocolStackNameSelection(DeviceName, True, byref(pProtocolStackNameSel), MaxStrSize, byref(pEndOfSelection), byref(pErrorCode))
         if pErrorCode.value == 0: 
             protLst.append(pProtocolStackNameSel.value)
@@ -418,6 +424,7 @@ class MAXON_Motor:
                 print_err (f'ERROR getting protocol. Dev = {DeviceName} Protocol ... = {pProtocolStackNameSel.value}  , pEndOfSelection = {pEndOfSelection.value}, pErrorCode = 0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
                 break
 
+        print_log(f'Available protocols: {protLst}')
         return protLst
 
     @staticmethod
@@ -428,6 +435,7 @@ class MAXON_Motor:
         pErrorCode = c_uint()
 
         devList = list()
+        print_log(f'Getting available devices...')
         MAXON_Motor.epos.VCS_GetDeviceNameSelection(True, byref(pDeviceNameSel),  MaxStrSize, byref(pEndOfSelection), byref(pErrorCode))
         if pErrorCode.value == 0:
             devList.append(pDeviceNameSel.value)
@@ -440,7 +448,7 @@ class MAXON_Motor:
             else:
                 print_err (f'ERROR getting device. Device ... = {pDeviceNameSel.value}, pEndOfSelection = {pEndOfSelection.value}, pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
                 break
-
+        print_log(f'Available devices: {devList}')
         return devList
 
 
@@ -793,6 +801,8 @@ class MAXON_Motor:
         self.__stop_motion.clear()              # reset stop event
         self.start_time = time.time()   
 
+        self.devNotificationQ.queue.clear()        # clear notification queue
+
         max_GRC:int = 0
         while (not self.__stop_motion.is_set()):
             try:
@@ -915,6 +925,7 @@ class MAXON_Motor:
 
 
         self.mDev_get_cur_pos()
+        print_log(f'Motor final position = {self.mDev_pos} and status = {self.success_flag}  on port = {self.mDev_port}')
         self.devNotificationQ.put(self.success_flag)
         
         return
@@ -1303,8 +1314,8 @@ class MAXON_Motor:
 class MAXON_Motor_Stub: 
     operation = namedtuple("operation", ["fw", "bw", "g2p", "stop"])
     devices:list[MAXON_Motor.portSp] = [
-        MAXON_Motor.portSp('stub_dev', 'stub_protocol', 'stub_usb','stub_port', '9600', '12345', 1, 'stub_sensor'),
-        MAXON_Motor.portSp('stub_dev2', 'stub_protocol', 'stub_usb','stub_port2', '9600', '67890', 2, 'stub_sensor2')
+        MAXON_Motor.portSp('stub_dev', 'stub_protocol', 'stub_usb','stub_port', '9600', '12345', 1, 'stub_sensor')
+        # , MAXON_Motor.portSp('stub_dev2', 'stub_protocol', 'stub_usb','stub_port2', '9600', '67890', 2, 'stub_sensor2')
         ]
     
 
