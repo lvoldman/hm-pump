@@ -1,0 +1,4 @@
+LOG*.txt
+*.bak
+*.log
+__pycache__/

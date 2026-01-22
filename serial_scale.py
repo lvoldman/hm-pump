@@ -6,7 +6,7 @@ from common_utils import print_err, print_DEBUG, print_warn, print_log, exptTrac
                         print_call_stack
 
 Scale = WLCscaleStub  # For testing without actual scale, replace with WLCscale for real scale
-
+Scale = WLCscale         # For production
 class serialScale(QObject):
     weightChanged = Signal(float)
     connectionChanged = Signal(bool)

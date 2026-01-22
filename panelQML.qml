@@ -160,7 +160,7 @@ ApplicationWindow {
                                     Label { text: "Current Limit (mA):" }
                                     SpinBox { 
                                         id: currentLimit; 
-                                        from: 1; to: 500; value: 300; editable: true 
+                                        from: 1; to: 5000; value: 2000; editable: true 
                                         onValueModified:{
                                             let val = value;
                                             if (!isNaN(val) && val !== null) {
@@ -209,7 +209,7 @@ ApplicationWindow {
                                     Behavior on opacity { NumberAnimation { duration: 200 } }
 
                                     Label { text: "Velocity:" }
-                                    SpinBox { id: velocity; from: 1; to: 5000; value: 1000; editable: true }
+                                    SpinBox { id: velocity; from: 1; to: 30000; value: 1000; editable: true }
 
                                     Label { text: "Acceleration:" }
                                     SpinBox { id: acceleration; from: 10; to: 10000; value: 2000; editable: true }

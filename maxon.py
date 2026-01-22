@@ -853,7 +853,7 @@ class MAXON_Motor:
                     _status:int = 0
                     _qStop:bool =  False
 
-############
+############        
                     _statusWord = MAXON_Motor.MXN_cmd(self.mDev_port, [STATUS_WORD_QUERY], keyHandle=self.__keyHandle, nodeID=self.__nodeID, lock=MAXON_Motor.mxn_lock)
                     if len(_statusWord) > 0:
                         _status  = _statusWord[0].answData
@@ -868,15 +868,16 @@ class MAXON_Motor:
 
                     MAXON_Motor.epos.VCS_GetState(self.keyHandle, self.mDev_nodeID, byref(pState), byref(pErrorCode))
                     _qStop_state:bool = (pState.value == 0x0002)                 # QuickStop state
-###########                            
-                    
+                         
+###########                       Disabling quick stop status check 
                     if pQuickStop.value or _qStop or _qStop_state or ( (time.time() - self.start_time > self.CURRENT_WAIT_TIME)  \
                                 and  ((abs(actualCurrentValue) <= self.IDLE_DEV_CURRENT) or (abs(pVelocityIs.value) <= self.IDLE_DEV_VELOCITY))):        # Quick stop is active 
 
-                        print_log(f'MAXON entered QuickStop state at port {self.mDev_port}. Exiting watchdog')
+                        print_warn(f'WARNING, MAXON entered QuickStop condition on port {self.mDev_port}. ')
+                        # print_log(f'MAXON entered QuickStop state at port {self.mDev_port}. Exiting watchdog')
                         print_log(f'{self.devName}: _qStop = {_qStop}(status =  0x{_status:02x} <> {num2binstr(_status)}) // state = {pState.value} (QuckStop by state = {_qStop_state}) //  pQuickStop.value = { pQuickStop.value} //  current = {actualCurrentValue}mA // velocity = {pVelocityIs.value}')
 
-                        break
+
                 else:
                     print_err(f'WatchDog MAXON failed read QuickStop status on port = {self.mDev_port}. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
 

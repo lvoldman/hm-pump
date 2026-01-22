@@ -44,17 +44,17 @@ class servoMotor(QObject):
     currentLimitChanged = Signal()    # Signal emitted when current limit changes
 
 
-    @staticmethod
-    def listMotors()->list[str]:       # List available servo motors SNs
-        servoMotor._motors = motServo.init_devices()      # Initialize and get list of available motors
-        print_log(f'Scanning available servo motors....{len(servoMotor._motors) if servoMotor._motors else 0} motors found: {servoMotor._motors}')  
+    @classmethod
+    def listMotors(cls)->list[str]:       # List available servo motors SNs
+        cls._motors = motServo.init_devices()      
         sn_motors:list[str] = list()
-        if servoMotor._motors is not None:
-            for m in servoMotor._motors:
+
+        if cls._motors is not None:
+            for m in cls._motors:
                 sn_motors.append(m.sn)
         else:
-            servoMotor._motors = list()
-            print_warn('No servo motors found during listing')
+            cls._motors = list()
+			print_warn('No servo motors found during listing')
 
         return  sn_motors
     
@@ -254,6 +254,7 @@ class servoMotor(QObject):
             if not self._motor:
                 print_err('No motor initialized')
                 return False    
+            self._motor.devNotificationQ.queue.clear()        # clear notification queue
             self._motor.mDev_reset_pos()
             print_DEBUG(f'home command issued')
             return True
@@ -270,6 +271,7 @@ class servoMotor(QObject):
             self._state = servoMotor.mState.RUNNING.value
             self.stateChanged.emit(self._state)
             self.__timeout = _parms.timeout
+            self._motor.devNotificationQ.queue.clear()        # clear notification queue
             self._motor.go2pos(int(new_position) if new_position and isinstance(new_position, (int, float)) else 0, 
                                 velocity=_parms.velocity,
                                 acceleration=_parms.acceleration,
@@ -294,6 +296,7 @@ class servoMotor(QObject):
             self._state = servoMotor.mState.RUNNING.value
             self.stateChanged.emit(self._state)
             self.__timeout = _parms.timeout
+            self._motor.devNotificationQ.queue.clear()        # clear notification queue
             self._motor.mDev_forward(velocity=_parms.velocity,
                                 acceleration=_parms.acceleration,
                                 deceleration=_parms.deceleration,
@@ -311,11 +314,13 @@ class servoMotor(QObject):
     
     @Slot(servoParameters, result=bool)
     def backward(self, _parms: servoParameters)->bool:
+        
         try:
             self.__start_time = time.time()                 # Record start time of operation
             self._state = servoMotor.mState.RUNNING.value
             self.stateChanged.emit(self._state)
             self.__timeout = _parms.timeout
+            self._motor.devNotificationQ.queue.clear()        # clear notification queue
             self._motor.mDev_backward(velocity=_parms.velocity,
                                   acceleration=_parms.acceleration,
                                   deceleration=_parms.deceleration,
@@ -347,6 +352,7 @@ class servoMotor(QObject):
         print_log(f'Stopping motor {self._current_sn}')
         try:
             if _status is None:
+                self._motor.devNotificationQ.queue.clear()        # clear notification queue
                 _status = self._motor.mDev_stop()
             # Unblock any waiters (best-effort)
             self._state = servoMotor.mState.IDLE.value
@@ -373,6 +379,8 @@ class servoMotor(QObject):
     def __watch_dog_thread(self):
         print_log(f'Watch dog thread started')
         self.devNotificationQ.queue.clear()        # clear notification queue
+        self._motor.devNotificationQ.queue.clear()        # clear notification queue
+
         _status = True
         try:
             while not self.__wd_stop.is_set():
