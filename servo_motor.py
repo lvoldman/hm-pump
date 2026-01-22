@@ -46,11 +46,16 @@ class servoMotor(QObject):
 
     @staticmethod
     def listMotors()->list[str]:       # List available servo motors SNs
-        servoMotor._motors = motServo.init_devices()      
+        servoMotor._motors = motServo.init_devices()      # Initialize and get list of available motors
+        print_log(f'Scanning available servo motors....{len(servoMotor._motors) if servoMotor._motors else 0} motors found: {servoMotor._motors}')  
         sn_motors:list[str] = list()
+        if servoMotor._motors is not None:
+            for m in servoMotor._motors:
+                sn_motors.append(m.sn)
+        else:
+            servoMotor._motors = list()
+            print_warn('No servo motors found during listing')
 
-        for m in servoMotor._motors:
-            sn_motors.append(m.sn)
         return  sn_motors
     
     def __init__(self, serial_number:str = None, parent=None):
