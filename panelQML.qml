@@ -157,6 +157,8 @@ ApplicationWindow {
                                         }
                                         font.pixelSize: 14
                                     }
+                                }
+                                RowLayout {
                                     Label { text: "Current Limit (mA):" }
                                     SpinBox { 
                                         id: currentLimit; 
@@ -169,8 +171,10 @@ ApplicationWindow {
                                             console.log("Current limit updated to " + val + " mA")
                                         }
                                     }
+                                    Label { text: "Actual current (mA):" }
+                                    TextField { readOnly: true; text: motorController?.actualCurrent ?? "—" }
                                 }
-
+                                
                                 //  Absolute move controls
                                 RowLayout {                     // absolute move row
                                     Label { text: "Destination position:" }     // label for destination position
@@ -223,6 +227,10 @@ ApplicationWindow {
                                     Label { text: "Current position:" }
                                     // TextField { readOnly: true; text: motorController.currentMotor?.position ?? "—" }
                                     TextField { readOnly: true; text: motorController?.position ?? "—" }
+
+                                    
+                                    Label { text: "Current velocity:" }
+                                    TextField { readOnly: true; text: motorController?.velocity ?? "—" }
 
                                     Label { text: "Running time:" }
                                     TextField { id: runtimeDisplay; readOnly: true; text: "00:00:00" }

@@ -207,6 +207,8 @@ class MAXON_Motor:
         self.mDev_port:str = mxnDev.port                          # USB1,USB2, USB3 for USB..
         self.mDev_nodeID:int = mxnDev.nodeid                            # 1,2,3..
         self.mDev_pos:int = 0                                 #  current position 
+        self.mDev_vel:int = 0                                 #  current velocity
+        self.actual_current = 0                             # actual current value
         self.el_current_limit:int = self.DEFAULT_CURRENT_LIMIT                       # electrical current limit to stop 
         self.wd = None                                      # watch dog identificator
         self.mDev_SN = mxnDev.sn                                   # Serial N (0x1018:0x04)
@@ -250,6 +252,7 @@ class MAXON_Motor:
             self.__setUpCommunication()
 
             self.mDev_get_cur_pos()
+            self.mDev_get_cur_velocity()
 
             self.init_dev()
 
@@ -766,6 +769,7 @@ class MAXON_Motor:
             print_err(f'Getting Actual Current Value on port  {self.mDev_port} failed. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)} ')
             return -1
         else:
+            self.actual_current = actualCurrentValue
             return actualCurrentValue
         
 
@@ -827,6 +831,7 @@ class MAXON_Motor:
                     if (int(abs(actualCurrentValue)) > int(self.el_current_limit)):
                         print_log(f' WatchDog MAXON: Actual Current Value = {actualCurrentValue}, Limit = {self.el_current_limit}')
                         _pos = self.mDev_get_cur_pos()
+                        self.mDev_get_cur_velocity()
                         if abs(_pos - self.new_pos) > self.EX_LIMIT:
                             print_log(f'Desired position [{self.new_pos}] is not reached. Current position = {_pos}')
                             self.success_flag = False
@@ -925,8 +930,10 @@ class MAXON_Motor:
             print_err(f'-WARNING unlocket mutual access mutex')
 
 
-        self.mDev_get_cur_pos()
-        print_log(f'Motor final position = {self.mDev_pos} and status = {self.success_flag}  on port = {self.mDev_port}')
+        self.mDev_pos = self.mDev_get_cur_pos()
+        self.mDev_vel = self.mDev_get_cur_velocity()
+        self.actual_current = self.mDev_get_actual_current()
+        print_log(f'Motor final position = {self.mDev_pos} actual current = {self.actual_current} and status = {self.success_flag}  on port = {self.mDev_port}')
         self.devNotificationQ.put(self.success_flag)
         
         return
@@ -960,6 +967,8 @@ class MAXON_Motor:
             return False
         
         self.mDev_get_cur_pos()
+        self.mDev_vel = self.mDev_get_cur_velocity()
+        self.actual_current = self.mDev_get_actual_current()
         return True
 
     def velocityModeMove(self, _velocity = None):
@@ -1232,7 +1241,21 @@ class MAXON_Motor:
     def mDev_stored_pos(self): 
         return self.mDev_pos
 
-   
+    def mDev_get_cur_velocity(self) -> int:
+        try:
+            pVelocityIs=c_long()
+            pErrorCode=c_uint()
+            ret = MAXON_Motor.epos.VCSGetVelocityIs(self.keyHandle, self.mDev_nodeID, byref(pVelocityIs), byref(pErrorCode))
+            if pErrorCode.value != 0:
+                print_err (f'ERROR geting MAXON {self.devName}  velocity on port {self.mDev_port}. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
+            self.mDev_vel = pVelocityIs.value
+        except Exception as ex:
+            e_type, e_filename, e_line_number, e_message = exptTrace(ex)
+            print_err(f"ERROR retriving velocity on device = {self.devName}, port={self.mDev_port},  Unexpected Exception: {ex}")
+            return 0         
+        else:
+            return self.mDev_vel 
+
     def mDev_get_cur_pos(self) -> int:
         try:
             pPositionIs=c_long()
@@ -1323,6 +1346,9 @@ class MAXON_Motor_Stub:
 
     def __init__(self, mxnDev:MAXON_Motor.portSp):
         self.mDev_pos:int = 0                                 #  current position 
+        self.mDev_vel:int = 0                                 #  current velocity
+        self.actual_current:int = 0                          #  actual current
+
         self.wd = None                                      # watch dog identificator
         self.mDev_SN = mxnDev.sn                                   # Serial N (0x1018:0x04)
         self.__stop_motion:threading.Event = threading.Event()  # Event to stop motion thread
@@ -1332,8 +1358,9 @@ class MAXON_Motor_Stub:
         self.devName:str = mxnDev.sn
         self.mDev_port:str = mxnDev.port 
         self.devNotificationQ = Queue()
-        self.mDev_get_cur_pos()
-        print_log(f'({self.devName}) Serial number = {self.mDev_SN} Position = {self.mDev_pos}')
+        # self.mDev_get_cur_pos()
+        # self.mDev_get_cur_velocity()
+        print_log(f'({self.devName}) Serial number = {self.mDev_SN} Position = {self.mDev_pos} Velocity = {self.mDev_vel}')
         self.mDev_status = True
 
     def __del__(self):
@@ -1354,7 +1381,7 @@ class MAXON_Motor_Stub:
         return True
 
     def mDev_get_actual_current(self) -> int:
-        return 10
+        return self.actual_current
         
 
     def _is_pos_reached(self, target_pos:int, ex_limit:int) -> bool:
@@ -1396,13 +1423,17 @@ class MAXON_Motor_Stub:
 
     def mDev_stop(self)-> bool:
         self.__stop_motion.set()
+        self.mDev_vel = 0
+        self.actual_current = 12
         return True
 
     def go2pos(self, new_position, velocity = None, acceleration = None, deceleration = None, stall=None)->bool:
         print_log(f'MAXON Stub GO2POS {new_position} velocity = {velocity}, dev = {self.devName}, port = {self.mDev_port}')
         self.__operation = self.operation.g2p
         self.new_pos = new_position
+        self.actual_current = 320
         self.mDev_watch_dog()
+        self.mDev_vel = int(velocity) if velocity else 2000
         return True  
 
     def mDev_stall(self)->bool:
@@ -1411,21 +1442,28 @@ class MAXON_Motor_Stub:
     def  mDev_forward(self, velocity = None, acceleration = None, deceleration = None, timeout=None, polarity:bool=None, stall = None)->bool:
         print_log(f'MAXON Stub FORWARD velocity = {velocity}, dev = {self.devName}, port = {self.mDev_port}, timeout={timeout}')
         self.__operation = self.operation.fw
+        self.actual_current = 320
         self.mDev_watch_dog()
+        self.mDev_vel = int(velocity) if velocity else 2000
         return True
     
     def  mDev_backward(self, velocity = None, acceleration = None, deceleration = None, timeout=None, polarity:bool = None, stall = None)-> bool:
         print_log(f'MAXON Stub BACKWARD velocity = {velocity}, dev = {self.devName}, port = {self.mDev_port}, timeout={timeout}')
         self.__operation = self.operation.bw                    # no need watchdog for zero speed
+        self.actual_current = 320
         self.mDev_watch_dog()
+        self.mDev_vel = -int(velocity) if velocity else -2000
         return True
     
     def mDev_stored_pos(self): 
         return self.mDev_pos
    
     def mDev_get_cur_pos(self) -> int:
-        return self.mDev_pos        
-
+        return self.mDev_pos       
+     
+    def mDev_get_cur_velocity(self) -> int:
+        return self.mDev_vel
+    
     def  mDev_reset_pos(self)->bool:
         self.mDev_stop()
         self.mDev_pos = 0
