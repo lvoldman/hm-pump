@@ -8,6 +8,7 @@ __maintainer__ = "Leonid Voldman"
 __email__ = "vleonid@voldman.com"
 __status__ = "production"
 
+import logging
 import sys
 import platform
 from pathlib import Path
@@ -59,26 +60,33 @@ if __name__ == "__main__":
     
     
 
-    app = QApplication(sys.argv)
+    app = QApplication(sys.argv)                # Create the application instance, argv list from command line
+                                                # and pass it to QApplication
 
-    engine = QQmlApplicationEngine()
+    engine = QQmlApplicationEngine()        # Create QML application engine
 
     # Register context objects
-    motor_ctrl = servoMotor()
-    scale = serialScale()
-    appInfo = AppInfo()
+    motor_ctrl = servoMotor()                   # Create motor controller object
+    scale = serialScale()                    # Create scale controller object  
+    appInfo = AppInfo()                      # Create application info object
 
+    # Set context properties for QML
     engine.rootContext().setContextProperty("motorController", motor_ctrl)
     engine.rootContext().setContextProperty("scaleController", scale)
     engine.rootContext().setContextProperty("appInfo", appInfo)
     
+    # Connect aboutToQuit signal to cleanup functions 
     app.aboutToQuit.connect(motor_ctrl.stopMotor)
     app.aboutToQuit.connect(scale.disconnect)
 
+    # Load QML file and start the application
     qml_file = Path(__file__).parent / "panelQML.qml"
-    engine.load(QUrl.fromLocalFile(str(qml_file)))
+    engine.load(QUrl.fromLocalFile(str(qml_file)))       # Load the QML file
+    
 
-    if not engine.rootObjects():
+    logging.shutdown()  # Ensure all logging messages are flushed before checking root objects
+    
+    if not engine.rootObjects():        # Check if root objects are loaded correctly
         sys.exit(-1)
 
-    sys.exit(app.exec())
+    sys.exit(app.exec())            # Start the application event loop and exit on completion

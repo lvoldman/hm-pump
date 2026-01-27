@@ -1,4 +1,5 @@
 
+import atexit
 from re import T
 import PySimpleGUI as sg
 import logging, datetime, sys, os, re
@@ -34,6 +35,12 @@ logging.basicConfig(format=log_format, handlers=[
         encoding = "utf8", level=logging.DEBUG)
 
 void_f = lambda a : None
+
+def logCleanup():                   # log cleanup at exit
+    print_log(f"Log cleanup")
+    logging.shutdown()              # shutdown logging system
+
+atexit.register(logCleanup)     # register log cleanup at exit
 
 print_DEBUG = logging.debug
 print_log = logging.info
