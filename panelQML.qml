@@ -22,6 +22,91 @@ ApplicationWindow {
     Material.primary: "#00E5FF"      // blue for primary elements
     Material.accent: "#00E5FF"          // blue for accent elements
     Material.foreground: "#E0E0E0"    // light gray for text/icons
+
+    menuBar: MenuBar {
+        
+        Action {
+            id: openAction
+            text: "Exit"
+            shortcut: "Ctrl+Q"
+            onTriggered: Qt.quit()
+        }      
+        Menu {
+            title: "File"
+
+            MenuItem {
+                action: openAction
+            }
+
+            // MenuItem { 
+            //     text: "Exit" 
+            //     shortcut: "Ctrl+Q"
+            //     onTriggered: Qt.quit() 
+            // }
+        }
+        
+        Menu {
+            title: "Help"
+            MenuItem { 
+                text: "About" 
+                onTriggered: aboutDialog.open() 
+            }
+            MenuSeparator { }
+            MenuItem { 
+                text: "Version: " + appInfo.version
+                enabled: false // Just text, not clickable
+            }
+        }
+    }
+
+    // About dialog
+    Dialog {
+        id: aboutDialog
+        title: "About"
+        padding: 20
+        anchors.centerIn: parent
+        standardButtons: Dialog.Ok
+        
+        // columnLayout: Column {
+        Column {
+            spacing: 10
+            Label { text: "SCADA Motor Controller" ; font.bold: true }
+            Label { text: "Version: " + appInfo.version }
+            Label { text: "Python " + appInfo.pythonVersion + " + PySide6" }
+        }
+    }
+
+    footer: ToolBar {
+        height: 30
+        background: Rectangle { color: "#f0f0f0" }
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 10
+            
+            Rectangle {
+                width: 10; height: 10
+                radius: 5
+                // color: motorController.isConnected ? "green" : "red"
+                color: motorController.state == "OFF" ? "red" : "green"
+            }
+            
+            Label {
+                // text: motorController.isConnected ? "Port: " + motorController.currentSerialNumber : "Connection lost"
+                color: motorController.state == "OFF" ? "red" : "green"
+                text: motorController.state != "OFF" ? "Motor: " + motorController.currentSerialNumber : "Connection lost"
+                font.pixelSize: 11
+            }
+            
+            Item { Layout.fillWidth: true } // Spacer
+            
+            Label {
+                color: "blue"
+                text: "CPU: " + appInfo.cpuLoad  // If you add such a metric in Python
+                font.pixelSize: 11
+            }
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0

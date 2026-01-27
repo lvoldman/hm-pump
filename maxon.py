@@ -353,9 +353,12 @@ class MAXON_Motor:
         if pErrorCode.value == 0:
             bdRate = MAXON_Motor.getMaxBaudrate(DeviceName, ProtocolStackName, InterfaceName, pPortSel.value)
             SN, nodeID, senorType = MAXON_Motor.getDevSN(DeviceName, ProtocolStackName, InterfaceName, pPortSel.value)
-
-            localPortlst.append(pPortSel.value)
-            MAXON_Motor.devices.append(MAXON_Motor.portSp(device=DeviceName, protocol=ProtocolStackName, interface=InterfaceName, port=pPortSel.value, baudrate=bdRate, sn=SN, nodeid=nodeID, sensortype=senorType))
+            if SN == 0:
+                print_warn (f'Serial # is 0 for Dev = {DeviceName} Protocol = {ProtocolStackName} InterfaceName = {InterfaceName} Port = {pPortSel.value}')
+            else:
+                print_log(f'Adding found (1) port for Dev = {DeviceName} Protocol = {ProtocolStackName} InterfaceName = {InterfaceName} Port = {pPortSel.value}, Baudrate = {bdRate}, SN = {SN}, nodeID = {nodeID}, senorType = {senorType}')
+                localPortlst.append(pPortSel.value)
+                MAXON_Motor.devices.append(MAXON_Motor.portSp(device=DeviceName, protocol=ProtocolStackName, interface=InterfaceName, port=pPortSel.value, baudrate=bdRate, sn=SN, nodeid=nodeID, sensortype=senorType))
         else:
             print_err (f'ERROR getting port. Dev = {DeviceName} Protocol = {ProtocolStackName} InterfaceName = {InterfaceName} Port (1) = {pPortSel.value}  , pEndOfSelection = {pEndOfSelection.value}, pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
 
@@ -364,9 +367,12 @@ class MAXON_Motor:
             if pErrorCode.value == 0:
                 bdRate = MAXON_Motor.getMaxBaudrate(DeviceName, ProtocolStackName, InterfaceName, pPortSel.value)
                 SN, nodeID, senorType = MAXON_Motor.getDevSN(DeviceName, ProtocolStackName, InterfaceName, pPortSel.value)
-                
-                localPortlst.append(pPortSel.value)
-                MAXON_Motor.devices.append(MAXON_Motor.portSp(device=DeviceName, protocol=ProtocolStackName, interface=InterfaceName, port=pPortSel.value, baudrate=bdRate, sn=SN, nodeid=nodeID, sensortype=senorType))
+                if SN == 0:
+                    print_warn (f'Serial # is 0 for Dev = {DeviceName} Protocol = {ProtocolStackName} InterfaceName = {InterfaceName} Port = {pPortSel.value}')
+                else:
+                    print_log(f'Adding found (...) port for Dev = {DeviceName} Protocol = {ProtocolStackName} InterfaceName = {InterfaceName} Port = {pPortSel.value}, Baudrate = {bdRate}, SN = {SN}, nodeID = {nodeID}, senorType = {senorType}')
+                    localPortlst.append(pPortSel.value)
+                    MAXON_Motor.devices.append(MAXON_Motor.portSp(device=DeviceName, protocol=ProtocolStackName, interface=InterfaceName, port=pPortSel.value, baudrate=bdRate, sn=SN, nodeid=nodeID, sensortype=senorType))
             else:
                 print_err (f'ERROR getting port. Dev = {DeviceName} Protocol = {ProtocolStackName} InterfaceName = {InterfaceID} Port ... = {pPortSel.value}  , pEndOfSelection = {pEndOfSelection.value}, pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
                 break
@@ -1245,7 +1251,7 @@ class MAXON_Motor:
         try:
             pVelocityIs=c_long()
             pErrorCode=c_uint()
-            ret = MAXON_Motor.epos.VCSGetVelocityIs(self.keyHandle, self.mDev_nodeID, byref(pVelocityIs), byref(pErrorCode))
+            ret = MAXON_Motor.epos.VCS_GetVelocityIs(self.keyHandle, self.mDev_nodeID, byref(pVelocityIs), byref(pErrorCode))
             if pErrorCode.value != 0:
                 print_err (f'ERROR geting MAXON {self.devName}  velocity on port {self.mDev_port}. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
             self.mDev_vel = pVelocityIs.value

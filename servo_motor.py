@@ -9,8 +9,8 @@ from common_utils import print_err, print_DEBUG, print_warn, print_log, exptTrac
                         print_call_stack
 from shiboken6 import isValid
 
-motServo = MAXON_Motor_Stub # For testing purposes, replace with MAXON_Motor for actual implementation
-# motServo = MAXON_Motor      #   For actual implementation
+# motServo = MAXON_Motor_Stub # For testing purposes, replace with MAXON_Motor for actual implementation
+motServo = MAXON_Motor      #   For actual implementation
 
 @dataclass
 class servoParameters:
@@ -42,6 +42,9 @@ class servoMotor(QObject):
                                         # NOTE: Added for consistency with MotorController
 
     currentLimitChanged = Signal()    # Signal emitted when current limit changes
+
+    velocityChanged = Signal(int)       # Current velocity in units
+    actualCurrentChanged = Signal(int)  # Current actual current in mA
 
 
     @classmethod
@@ -451,5 +454,8 @@ class servoMotor(QObject):
 
         self.devNotificationQ.put(_status)          # Notify operation completion
         self.positionChanged.emit(self.position)                                # Monitor operation status
-        self.velocityChanged.emit(self.velocity)
-        self.actualCurrentChanged.emit(self.actualCurrent)
+        self.positionChanged.emit(self.velocity)
+        self.positionChanged.emit(self.actualCurrent)
+        # self.velocityChanged.emit(self.velocity)
+        # self.actualCurrentChanged.emit(self.actualCurrent)
+        return

@@ -50,7 +50,6 @@ class serialScale(QObject):
         self._connected = self.isConnected
 
     def __del__(self):
-        self.__wd_stop.set()
         self.disconnect()
 
     def __repr__(self):
@@ -91,6 +90,33 @@ class serialScale(QObject):
     def isConnected(self):
         # print_DEBUG(f'Checking connection status for scale on port {self._port}: {self._scale} ->{self._scale.is_connected() if self._scale else False}')
         return self._scale.is_connected() if self._scale else False
+    
+    @Slot(result=bool)
+    def disconnect(self)->bool:
+        try:
+            self.__wd_stop.set()
+            if self.__wd and self.__wd.is_alive():
+                print_log('Waiting for watchdog thread to stop...')
+                self.__wd.join(timeout=1.0)
+                if self.__wd.is_alive():
+                    print_warn('Watchdog thread did not stop in time')
+                else:
+                    print_log('Watchdog thread stopped successfully')
+        
+                print_log(f'Disconnecting scale on port {self._port}')
+                if self._scale and self._scale.is_connected():
+                    self._scale.disconnect()
+                self._connected = False
+                self.connectionChanged.emit(False)        
+        
+        except Exception as e:
+            print_warn(f'Error while stopping watchdog thread: {e}')
+            exptTrace(e)
+            return False
+        
+        return True
+        
+
 
     @Slot(str)
     def update_serial_port(self, port: str):
