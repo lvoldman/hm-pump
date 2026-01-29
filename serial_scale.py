@@ -5,8 +5,8 @@ import time
 from common_utils import print_err, print_DEBUG, print_warn, print_log, exptTrace, print_trace, \
                         print_call_stack
 
-Scale = WLCscaleStub  # For testing without actual scale, replace with WLCscale for real scale
-# Scale = WLCscale         # For production
+# Scale = WLCscaleStub  # For testing without actual scale, replace with WLCscale for real scale
+Scale = WLCscale         # For production
 
 
 class serialScale(QObject):
@@ -40,6 +40,10 @@ class serialScale(QObject):
         self._port = serial_port if serial_port else (serialScale._scales[0] if serialScale._scales else "")
         print_log(f'Available scales: {serialScale._scales}, requested port: {self._port}')
 
+        if not self._port:
+            print_err('No serial port specified and no scales found')
+            return
+
         if self._port not in serialScale._scales:
             raise ValueError(f'Serial scale with port {self._port} not found among available ports: {serialScale._scales}')
         
@@ -47,6 +51,7 @@ class serialScale(QObject):
             self._scale = Scale(self._port, poll_interval)
         else:
             raise ValueError('No serial port specified for serialScale')
+        
         self._connected = self.isConnected
 
     def __del__(self):
@@ -94,6 +99,10 @@ class serialScale(QObject):
     @Slot(result=bool)
     def disconnect(self)->bool:
         try:
+            if not self._scale:
+                print_warn('No scale instance to disconnect')
+                return False
+            
             self.__wd_stop.set()
             if self.__wd and self.__wd.is_alive():
                 print_log('Waiting for watchdog thread to stop...')
@@ -121,6 +130,9 @@ class serialScale(QObject):
     @Slot(str)
     def update_serial_port(self, port: str):
         print_DEBUG(f'Updating serial port to {self._port}-> {port}')
+        if not self._scale:
+            print_err(f'No scale instance to update port to {port}')
+            return
         self._port = port
         self._scale.update_serial_port(port)
         self.connectionChanged.emit(self.isConnected)
@@ -128,10 +140,14 @@ class serialScale(QObject):
     @Slot(float)
     def update_poll_interval(self, interval: float):
         self._poll_interval = interval
-        self._scale.updatePollInterval(interval)
+        if self._scale:
+            self._scale.updatePollInterval(interval)
 
     @Slot(result=bool)
     def connect(self) -> bool:
+        if not self._scale:
+            print_err('No scale instance to connect')
+            return False
         self._connected = True
         self._scale.connect()
         self.connectionChanged.emit(True)

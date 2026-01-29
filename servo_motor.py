@@ -9,8 +9,8 @@ from common_utils import print_err, print_DEBUG, print_warn, print_log, exptTrac
                         print_call_stack
 from shiboken6 import isValid
 
-# motServo = MAXON_Motor_Stub # For testing purposes, replace with MAXON_Motor for actual implementation
-motServo = MAXON_Motor      #   For actual implementation
+motServo = MAXON_Motor_Stub # For testing purposes, replace with MAXON_Motor for actual implementation
+# motServo = MAXON_Motor      #   For actual implementation
 
 @dataclass
 class servoParameters:
@@ -440,12 +440,11 @@ class servoMotor(QObject):
                         if (time.time() - self.__start_time) > self.__timeout:
                             print_log(f'Operation timed out')
                             _status = True
-                            self.stop()
+                            self.stopMotor(_status=_status)
                     if self._motor.devNotificationQ.qsize() > 0:
                         _status = self._motor.devNotificationQ.get()
                         print_log(f'Operation completed with status {_status}')
-                        self.stop()
-
+                        self.stopMotor(_status=_status)
                 time.sleep(0.1)
             print_log(f'Watch dog thread stopped at position {self.__position}')
         except Exception as e:
