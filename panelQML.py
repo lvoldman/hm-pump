@@ -14,7 +14,7 @@ import platform
 from pathlib import Path
 from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
-from PySide6.QtCore import QObject, Signal, Property, Slot, QUrl
+from PySide6.QtCore import QObject, Signal, Property, Slot, QUrl, qInstallMessageHandler, QtMsgType
 
 import os
 os.environ["QT_LOGGING_RULES"] = "qt.qml.binding.debug=true;qt.remoteobjects.debug=true"
@@ -27,6 +27,21 @@ from serial_scale import serialScale
 
 from common_utils import print_err, print_DEBUG, print_warn, print_log, exptTrace, print_trace, \
                         print_call_stack
+
+def qt_message_handler(mode: QtMsgType, context, message: str):
+    # logger = logging.getLogger("QML")
+    if mode == QtMsgType.QtDebugMsg:
+        # logger.debug(message)
+        print_DEBUG(f"Qt Debug: {message} (File: {context.file}, Line: {context.line}, Function: {context.function})")
+    elif mode == QtMsgType.QtInfoMsg:
+        print_log(f"Qt Info: {message} (File: {context.file}, Line: {context.line}, Function: {context.function})")
+    elif mode == QtMsgType.QtWarningMsg:
+        print_warn(f"Qt Warning: {message} (File: {context.file}, Line: {context.line}, Function: {context.function})")
+    elif mode == QtMsgType.QtCriticalMsg:
+        print_err(f"Qt Critical: {message} (File: {context.file}, Line: {context.line}, Function: {context.function})")
+    elif mode == QtMsgType.QtFatalMsg:
+        print_err(f"Qt Fatal: {message} (File: {context.file}, Line: {context.line}, Function: {context.function})")
+        sys.exit(1)
 
 class AppInfo(QObject):
     @Property(str, constant=True)
@@ -57,7 +72,8 @@ class AppInfo(QObject):
 
 # ─── Application run ─────────────────────────────────────────────────────
 if __name__ == "__main__":
-    
+
+    qInstallMessageHandler(qt_message_handler)  # Install custom Qt message handler
     
 
     app = QApplication(sys.argv)                # Create the application instance, argv list from command line
