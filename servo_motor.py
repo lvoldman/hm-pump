@@ -99,7 +99,11 @@ class servoMotor(QObject):
                     self._state = servoMotor.mState.IDLE.value
                     break
             else:
-                raise ValueError(f'Servo motor with serial number {self._current_sn} not found')
+                if len(servoMotor._motors) == 0:
+                    print_warn('No servo motors found during initialization')
+                else:
+                    raise ValueError(f'Servo motor with serial number {self._current_sn} not found')
+                return
             
             self.__position = self._motor.mDev_get_cur_pos()
             self.__velocity = self._motor.mDev_get_cur_velocity()
@@ -382,7 +386,7 @@ class servoMotor(QObject):
     def stopMotor(self, _status:bool | None=None)->bool:                               # atomic stop operation (no watchdog)
         print_log(f'Stopping motor {self._current_sn}')
         try:
-            if _status is None:
+            if self._motor and _status is None:
                 self._motor.devNotificationQ.queue.clear()        # clear notification queue
                 _status = self._motor.mDev_stop()
             # Unblock any waiters (best-effort)

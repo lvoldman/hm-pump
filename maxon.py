@@ -396,7 +396,7 @@ class MAXON_Motor:
             print_log(f'Adding found (1) interface for Dev = {DeviceName} and Protocol{ProtocolStackName}: {pInterfaceNameSel.value}')
             InterfaceLst.append(pInterfaceNameSel.value)
         else:
-            print_err (f'ERROR getting interface. Dev = {DeviceName} Protocol = {ProtocolStackName} InterfaceName (1) = {pInterfaceNameSel.value}  , pEndOfSelection = {pEndOfSelection.value}, pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
+            print_warn (f'ERROR getting interface. Dev = {DeviceName} Protocol = {ProtocolStackName} InterfaceName (1) = {pInterfaceNameSel.value}  , pEndOfSelection = {pEndOfSelection.value}, pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
 
         while not pEndOfSelection.value:
             MAXON_Motor.epos.VCS_GetInterfaceNameSelection(DeviceName, ProtocolStackName, False, byref(pInterfaceNameSel), \
@@ -405,7 +405,7 @@ class MAXON_Motor:
                 print_log(f'Adding found (...) interface for Dev = {DeviceName} and Protocol{ProtocolStackName}: {pInterfaceNameSel.value}') 
                 InterfaceLst.append(pInterfaceNameSel.value)
             else:
-                print_err (f'ERROR getting interface. Dev = {DeviceName} Protocol = {ProtocolStackName} InterfaceName ... = {pInterfaceNameSel.value}  , pEndOfSelection = {pEndOfSelection.value}, pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
+                print_warn(f'ERROR getting interface. Dev = {DeviceName} Protocol = {ProtocolStackName} InterfaceName ... = {pInterfaceNameSel.value}  , pEndOfSelection = {pEndOfSelection.value}, pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
                 break
         print_log(f'Available interfaces: {InterfaceLst}')
         return InterfaceLst
