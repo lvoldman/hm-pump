@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.15
+import QtCharts 2.15
 
 
 // Main application window
@@ -291,17 +292,27 @@ ApplicationWindow {
                                 }
 
                                 GridLayout {
-                                    columns: 2
+                                    columns: 4
                                     Layout.fillWidth: true
-                                    enabled: !motorController.isMoving   // Disable while motor is moving
+                                    // enabled: !motorController.isMoving   // Disable while motor is moving
                                     opacity: enabled ? 1.0 : 0.5 // Visual feedback when disabled
                                     Behavior on opacity { NumberAnimation { duration: 200 } }
 
                                     Label { text: "Velocity:" }
-                                    SpinBox { id: velocity; from: 1; to: 30000; value: 1000; editable: true }
+                                    SpinBox { enabled: !motorController.isMoving; id: velocity; from: 1; to: 30000; value: 1000; editable: true }
+
+
+                                    Label { text: "Current velocity:" }
+                                    TextField { readOnly: true; text: motorController?.velocity ?? "—" }
 
                                     Label { text: "Acceleration:" }
-                                    SpinBox { id: acceleration; from: 10; to: 10000; value: 2000; editable: true }
+                                    SpinBox { enabled: !motorController.isMoving; id: acceleration; from: 10; to: 10000; value: 2000; editable: true }
+                                    Item { Layout.fillWidth: true }    // Spacer to push controls to the left, and prevent stretching of spinboxes when resizing
+                                    Item { Layout.fillWidth: true } 
+
+
+
+
                                 }
 
                                 Rectangle { Layout.fillWidth: true; height: 1; color: "#444" }
@@ -314,8 +325,8 @@ ApplicationWindow {
                                     TextField { readOnly: true; text: motorController?.position ?? "—" }
 
                                     
-                                    Label { text: "Current velocity:" }
-                                    TextField { readOnly: true; text: motorController?.velocity ?? "—" }
+                                    // Label { text: "Current velocity:" }
+                                    // TextField { readOnly: true; text: motorController?.velocity ?? "—" }
 
                                     Label { text: "Running time:" }
                                     TextField { id: runtimeDisplay; readOnly: true; text: "00:00:00" }
