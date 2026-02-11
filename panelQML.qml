@@ -452,7 +452,8 @@ ApplicationWindow {
                                 border.color: "#444"
                                 Label {
                                     anchors.centerIn: parent
-                                    text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.weight / runningTimer.seconds).toFixed(2) : "0.00") + " kg/s"
+                                    // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.weight / runningTimer.seconds).toFixed(2) : "0.00") + " kg/s"
+                                    text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.ROC).toFixed(2) : "0.00") + " kg/s"
                                     color: "#FFA500" // Оранжевый для производных данных
                                     font.pixelSize: 20
                                 }
