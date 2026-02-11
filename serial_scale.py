@@ -5,8 +5,8 @@ import time
 from common_utils import print_err, print_DEBUG, print_warn, print_log, exptTrace, print_trace, \
                         print_call_stack
 
-# Scale = WLCscaleStub  # For testing without actual scale, replace with WLCscale for real scale
-Scale = WLCscale         # For production
+Scale = WLCscaleStub  # For testing without actual scale, replace with WLCscale for real scale
+# Scale = WLCscale         # For production
 
 
 class serialScale(QObject):
