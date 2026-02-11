@@ -12,7 +12,7 @@ Scale = WLCscaleStub  # For testing without actual scale, replace with WLCscale 
 class serialScale(QObject):
     weightChanged = Signal(float)
     # counterChanged = Signal(int)      # for future use if we want to track number of weight updates
-    ROCChanged = Signal()
+    rocChanged = Signal()
     connectionChanged = Signal(bool)
     currentPortChanged = Signal()   # Signal emitted when current port changes (for compatibility)
     # _ports: list[str] | None = None
@@ -29,6 +29,7 @@ class serialScale(QObject):
         self._weight = 0.0
         self.__last_weight = 0                          # For calculating rate of change (ROC)
         self.__last_time = time.time()                  # For calculating rate of change (ROC)
+        self.__last_roc = 0.0                            # Store last ROC value to return if time difference is zero
         self._connected: bool = False                       # Connection status
         self._poll_interval = poll_interval                     # Polling interval for watchdog
         self._scale:Scale | None = None             # Scale instance
@@ -37,12 +38,12 @@ class serialScale(QObject):
         self.__wd_stop.clear()  
         self._watch_dog_run()
 
-        # self.weightChanged.connect(self.ROCChanged)   # Automatically update ROC when weight or counter changes, 
+        # self.weightChanged.connect(self.rocChanged)   # Automatically update ROC when weight or counter changes, 
                                                         # can be used if we want to calculate ROC on weight change instead of time-based polling
                                                         # Note: If we calculate ROC on weight change, we need to ensure that weight updates are 
                                                         # frequent enough to get accurate ROC, and we may want to add a timer-based update as well to 
                                                         # handle cases where weight doesn't change but we still want to update ROC based on time.
-        # self.counterChanged.connect(self.ROCChanged)
+        # self.counterChanged.connect(self.rocChanged)
 
         if serialScale._scales is None:
             print_log('Listing scales for the first time in serialScale init')
@@ -102,12 +103,17 @@ class serialScale(QObject):
     def weight(self):
         return self._scale.weight if self._scale else 0.0   
 
-    @Property(float, notify=ROCChanged)
+    @Property(float, notify=rocChanged)
     def ROC(self):
         __time = time.time()
-        _roc = (self._scale.weight - self.__last_weight) / (__time - self.__last_time) if self._scale else 0.0
+        if not __time == self.__last_time:          # Avoid division by zero if called multiple times within the same time unit
+            _roc = (self._scale.weight - self.__last_weight) / (__time - self.__last_time) if self._scale else 0.0
+        else:
+            _roc = self.__last_roc
+
         self.__last_weight = self._scale.weight if self._scale else 0.0
         self.__last_time = __time
+        self.__last_roc = _roc
         return _roc
 
 
@@ -186,7 +192,7 @@ class serialScale(QObject):
             while not self.__wd_stop.is_set():
                 self.connectionChanged.emit(self.isConnected)                                # Monitor operation status
                 self.weightChanged.emit(self.weight)
-                self.ROCChanged.emit()
+                self.rocChanged.emit()
                 time.sleep(self._poll_interval)
             print_log(f'Watch dog thread stopped with weight={self.weight}')
         except Exception as e:

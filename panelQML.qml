@@ -1,8 +1,8 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
-import QtQuick.Controls.Material 2.15
-import QtCharts 2.15
+import QtQuick 
+import QtQuick.Controls 
+import QtQuick.Layouts 
+import QtQuick.Controls.Material
+import QtCharts
 
 
 // Main application window
@@ -398,110 +398,185 @@ ApplicationWindow {
                             }
                         }
 
-
-                        ColumnLayout {
-                            // width: scrollView.width   // ← neccesary for horizontal alignment
-                            // height: scrollView.height // ← do not set height, if want it expand naturally
-                            spacing: 16
+                        ScrollView {
+                            id: scaleScroll
                             anchors.fill: parent
-                            anchors.margins: 12
-                            Label { text: "MEASUREMENT UNIT"; font.bold: true; font.pixelSize: 12; color: "#8A919E" }
-                            RowLayout {
-                                Label { text: "Scale Status:"; font.bold: true }
+                            clip: true
+                            contentWidth: availableWidth
+
+                            ColumnLayout {
+                                // width: scrollView.width   // ← neccesary for horizontal alignment
+                                // height: scrollView.height // ← do not set height, if want it expand naturally
+                                width: scaleScroll.availableWidth // fill width of scroll area for proper alignment
+                                // height: scaleScroll.availableHeight // do not set height, if want it expand naturally
+                                spacing: 16
+                                anchors.fill: parent
+                                anchors.margins: 12
+                                Label { text: "MEASUREMENT UNIT"; font.bold: true; font.pixelSize: 12; color: "#8A919E" }
+                                RowLayout {
+                                    Label { text: "Scale Status:"; font.bold: true }
+                                    Rectangle {
+                                        width: 18; height: 18; radius: 9
+                                        color: scaleController.isConnected ? "#4CAF50" : "#F44336"
+                                    }
+                                    Label { text: scaleController.isConnected ? "CONNECTED" : "DISCONNECTED" }
+                                }
+                                
+                                Label { text: "Select Port:" }
+                                ComboBox {
+                                    Layout.fillWidth: true
+                                    model: scaleController.availablePorts // model from ScaleController
+                                    // currentIndex: model.indexOf(scaleController.currentSerialPort)
+                                    currentIndex: model ? model.indexOf(scaleController.currentSerialPort) : -1   // handle empty model case, if no scales found
+                                    onActivated: (index) => {
+                                        scaleController.update_serial_port(model[index])
+                                        scaleController.connect()
+                                        console.log("Port selected: " + "number " + index + " " + model[index])
+                                    }
+                                }
+                                Label { text: "Weight:" }
                                 Rectangle {
-                                    width: 18; height: 18; radius: 9
-                                    color: scaleController.isConnected ? "#4CAF50" : "#F44336"
-                                }
-                                Label { text: scaleController.isConnected ? "CONNECTED" : "DISCONNECTED" }
-                            }
-                            
-                            Label { text: "Select Port:" }
-                            ComboBox {
-                                Layout.fillWidth: true
-                                model: scaleController.availablePorts // model from ScaleController
-                                // currentIndex: model.indexOf(scaleController.currentSerialPort)
-                                currentIndex: model ? model.indexOf(scaleController.currentSerialPort) : -1   // handle empty model case, if no scales found
-                                onActivated: (index) => {
-                                    scaleController.update_serial_port(model[index])
-                                    scaleController.connect()
-                                    console.log("Port selected: " + "number " + index + " " + model[index])
-                                }
-                            }
-                            Label { text: "Weight:" }
-                            Rectangle {
-                                Layout.fillWidth: true
-                                height: 80
-                                color: "#0A0B0E" // Почти черный "экран"
-                                border.color: "#444"
-                                radius: 4
+                                    Layout.fillWidth: true
+                                    height: 80
+                                    color: "#0A0B0E" // Почти черный "экран"
+                                    border.color: "#444"
+                                    radius: 4
 
-                                Label {
-                                    anchors.centerIn: parent
-                                    text: scaleController.weight.toFixed(2) + " kg"
-                                    color: "#00E5FF" // Цифровой голубой
-                                    font.pixelSize: 42
-                                    font.family: "Courier New"
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: scaleController.weight.toFixed(2) + " kg"
+                                        color: "#00E5FF" // Цифровой голубой
+                                        font.pixelSize: 42
+                                        font.family: "Courier New"
+                                    }
                                 }
-                            }
-                            // TextField {
-                            //     id: weightDisplay
-                            //     Layout.fillWidth: true
-                            //     readOnly: true
-                            //     color: "#00E5FF" // Neon blue color for weight display
-                            //     font.family: "Courier New" // Industrial style
-                            //     font.pixelSize: 32
-                            //     background: Rectangle { color: "#0A0C10"; radius: 2 }
-                            //     horizontalAlignment: Text.AlignHCenter
-                            //     text: scaleController.weight ? scaleController.weight.toFixed(2) + " kg" : "—"
-                            // }
+                                // TextField {
+                                //     id: weightDisplay
+                                //     Layout.fillWidth: true
+                                //     readOnly: true
+                                //     color: "#00E5FF" // Neon blue color for weight display
+                                //     font.family: "Courier New" // Industrial style
+                                //     font.pixelSize: 32
+                                //     background: Rectangle { color: "#0A0C10"; radius: 2 }
+                                //     horizontalAlignment: Text.AlignHCenter
+                                //     text: scaleController.weight ? scaleController.weight.toFixed(2) + " kg" : "—"
+                                // }
 
-                            Label { text: "Power=W/T:" }
-                            Rectangle {
-                                Layout.fillWidth: true
-                                height: 60
-                                color: "#0A0B0E"
-                                border.color: "#444"
-                                Label {
-                                    anchors.centerIn: parent
-                                    // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.weight / runningTimer.seconds).toFixed(2) : "0.00") + " kg/s"
-                                    text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.ROC).toFixed(2) : "0.00") + " kg/s"
-                                    color: "#FFA500" // Оранжевый для производных данных
-                                    font.pixelSize: 20
+                                Label { text: "Power=W/T:" }
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    height: 60
+                                    color: "#0A0B0E"
+                                    border.color: "#444"
+                                    Label {
+                                        anchors.centerIn: parent
+                                        // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.weight / runningTimer.seconds).toFixed(2) : "0.00") + " kg/s"
+                                        // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.ROC).toFixed(2) : "0.00") + " kg/s"
+                                        text: "Rate of Change (ROC): " + (scaleController.ROC).toFixed(2)  + " kg/s"
+                                        color: "#FFA500" // Оранжевый для производных данных
+                                        font.pixelSize: 20
+                                    }
                                 }
-                            }
-                            // TextField {
-                            //     Layout.fillWidth: true
-                            //     readOnly: true
-                            //     color: "#00E5FF" // Neon blue color for weight display
-                            //     font.family: "Courier New" // Industrial style
-                            //     font.pixelSize: 32
-                            //     background: Rectangle { color: "#0A0C10"; radius: 2 }
-                            //     // text: "Rate of Change by Weight (ROC) - Weight/Time"
-                            //     text: {
-                            //         if ( motorController.isMoving && scaleController.weight !== undefined && runningTimer.seconds > 0) {
-                            //             let power = scaleController.weight / runningTimer.seconds; // kg/s
-                            //             return power.toFixed(2) + " kg/s"
-                            //         } else {
-                            //             return "Rate of Change by Weight (ROC) - Weight/Time"
-                            //         }
-                            //     }
-                            // }
+                                // TextField {
+                                //     Layout.fillWidth: true
+                                //     readOnly: true
+                                //     color: "#00E5FF" // Neon blue color for weight display
+                                //     font.family: "Courier New" // Industrial style
+                                //     font.pixelSize: 32
+                                //     background: Rectangle { color: "#0A0C10"; radius: 2 }
+                                //     // text: "Rate of Change by Weight (ROC) - Weight/Time"
+                                //     text: {
+                                //         if ( motorController.isMoving && scaleController.weight !== undefined && runningTimer.seconds > 0) {
+                                //             let power = scaleController.weight / runningTimer.seconds; // kg/s
+                                //             return power.toFixed(2) + " kg/s"
+                                //         } else {
+                                //             return "Rate of Change by Weight (ROC) - Weight/Time"
+                                //         }
+                                //     }
+                                // }
 
-                            Item { Layout.fillHeight: true }
+                                // Item { Layout.fillHeight: true }    // Spacer to push chart to the bottom, and prevent stretching when resizing
 
-                            RowLayout {
-                                Label { text: "Poll interval (ms):" }
-                                SpinBox {
-                                    from: 50; to: 5000; value: 100; stepSize: 50; editable: true
-                                    onValueModified:{
-                                        let val = value / 1000;
-                                        if (!isNaN(val) && val !== null) {
-                                            scaleController.update_poll_interval(val); // convert ms to s
+                                RowLayout {
+                                    Label { text: "Poll interval (ms):" }
+                                    SpinBox {
+                                        from: 50; to: 5000; value: 100; stepSize: 50; editable: true
+                                        onValueModified:{
+                                            let val = value / 1000;
+                                            if (!isNaN(val) && val !== null) {
+                                                scaleController.update_poll_interval(val); // convert ms to s
+                                            }
+                                            // scaleController.update_poll_interval(value / 1000)   // convert ms to s
+                                            console.log("Poll interval updated to " + value + " ms")
+                                        } 
+                                    }
+                                }
+                                
+                                ChartView {
+                                    id: rocChart
+                                    title: "Скорость изменения (ROC)"
+                                    // anchors.fill: parent // or set specific width/height 
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    Layout.preferredHeight: 300 // minimum height for good visibility
+                                    enabled: !motorController.isMoving;
+
+                                    antialiasing: true
+                                    theme: ChartView.ChartThemeLight
+
+                                    ValueAxis {
+                                        id: axisX
+                                        min: 0
+                                        max: 100 // Количество точек на экране
+                                        labelFormat: " " // Скрываем цифры времени, если они не важны
+                                    }
+
+                                    ValueAxis {
+                                        id: axisY
+                                        min: 0
+                                        max: 500 // Настройте под ваши рабочие диапазоны ROC
+                                    }
+
+                                    LineSeries {
+                                        id: rocSeries
+                                        name: "ROC (г/сек)"
+                                        axisX: axisX
+                                        axisY: axisY
+                                        color: "#2ecc71"
+                                        width: 2
+                                    }
+                                    // Вспомогательная переменная для отслеживания "времени" (оси X)
+                                    property int scrollTick: 0
+
+                                    // Сама функция обновления
+                                    function updateChart(newValue) {
+                                        scrollTick++;
+                                        
+                                        // Добавляем новую точку
+                                        rocSeries.append(scrollTick, newValue);
+
+                                        // Если точек набралось больше, чем max оси X
+                                        if (scrollTick > axisX.max) {
+                                            // Сдвигаем окно видимости осей
+                                            axisX.min++;
+                                            axisX.max++;
+                                            
+                                            // Удаляем самую старую точку из памяти, чтобы список не рос вечно
+                                            if (rocSeries.count > 120) { // Держим чуть больше, чем max, для плавности
+                                                rocSeries.remove(0);
+                                            }
                                         }
-                                        // scaleController.update_poll_interval(value / 1000)   // convert ms to s
-                                        console.log("Poll interval updated to " + value + " ms")
-                                    } 
+                                    }
+
+                                    // Подключаемся к сигналу из Python
+                                    Connections {
+                                        target: scaleController
+                                        function onRocChanged() {
+                                            rocChart.updateChart(scaleController.ROC);
+                                        }
+                                    }
                                 }
+
                             }
                         }
                     }
