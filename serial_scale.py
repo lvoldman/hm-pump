@@ -2,6 +2,8 @@ from PySide6.QtCore import QObject, Signal, Property, Slot, QUrl
 from WLCscale import WLCscale, WLCscaleStub
 import threading    
 import time
+from collections import deque
+
 from common_utils import print_err, print_DEBUG, print_warn, print_log, exptTrace, print_trace, \
                         print_call_stack
 
@@ -35,6 +37,11 @@ class serialScale(QObject):
         self._scale:Scale | None = None             # Scale instance
         self.__wd:threading.Thread | None = None                  # Watchdog thread
         self.__wd_stop:threading.Event = threading.Event() # Event to stop watchdog thread
+        # Queue for smoothing delta (up to 10 samples)
+        self.delta_history = deque(maxlen=10)
+        self.smooth_delta = 0
+        self.delta_history.clear()
+
         self.__wd_stop.clear()  
         self._watch_dog_run()
 
@@ -84,6 +91,8 @@ class serialScale(QObject):
     @currentSerialPort.setter
     def currentSerialPort(self, port: str):
         print_DEBUG(f'Setting current serial port from {self._port} to {port}')
+        self.delta_history.clear()
+
         if port != self._port:
             self._port = port
             self._scale = serialScale(port)
@@ -101,20 +110,38 @@ class serialScale(QObject):
 
     @Property(float, notify=weightChanged)
     def weight(self):
+        # print_DEBUG(f'W={self._scale.weight if self._scale else 0.0}')
         return self._scale.weight if self._scale else 0.0   
 
     @Property(float, notify=rocChanged)
     def ROC(self):
         __time = time.time()
-        if not __time == self.__last_time:          # Avoid division by zero if called multiple times within the same time unit
-            _roc = (self._scale.weight - self.__last_weight) / (__time - self.__last_time) if self._scale else 0.0
+        new_weight = self._scale.weight if self._scale else 0.0
+        
+        if new_weight== 0:
+            return 0
+        
+        _roc:float = 0
+        if __time != self.__last_time:          # Avoid division by zero 
+            _roc = (new_weight - self.__last_weight) * 60 / (__time - self.__last_time) 
+
         else:
             _roc = self.__last_roc
 
-        self.__last_weight = self._scale.weight if self._scale else 0.0
+        self.delta_history.append(_roc)
+
+        if len(self.delta_history) ==  self.delta_history.maxlen:
+            _sum = sum(list(self.delta_history)[1:])
+            self.smooth_delta = _sum / (len(self.delta_history)-1)
+            # self.smooth_delta = sum(self.delta_history) / len(self.delta_history)
+        else:
+            self.smooth_delta = 0
+
+        self.__last_weight = new_weight 
         self.__last_time = __time
         self.__last_roc = _roc
-        return _roc
+        # return _roc
+        return self.smooth_delta
 
 
     @Property(bool, notify=connectionChanged)
@@ -188,13 +215,16 @@ class serialScale(QObject):
         
     def __watch_dog_thread(self):
         print_log(f'Watch dog thread started')
-        try:
-            while not self.__wd_stop.is_set():
+        while not self.__wd_stop.is_set():
+            try:
                 self.connectionChanged.emit(self.isConnected)                                # Monitor operation status
                 self.weightChanged.emit(self.weight)
                 self.rocChanged.emit()
-                time.sleep(self._poll_interval)
-            print_log(f'Watch dog thread stopped with weight={self.weight}')
-        except Exception as e:
-            print_log(f'Error in watch dog thread: {e}')
-            exptTrace(e)
+                if self.__wd_stop.wait(float(self._poll_interval)):
+                    break
+                # time.sleep(self._poll_interval)
+            except Exception as e:
+                print_log(f'Error in watch dog thread: {e}')
+                exptTrace(e)
+        
+        print_log(f'Watch dog thread stopped with weight={self.weight}')

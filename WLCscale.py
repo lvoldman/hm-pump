@@ -44,18 +44,20 @@ class WLCscale:
 
     def connect(self)->bool:
         try:
-
-            self.__connection = serial.Serial(self.__serial_port, 
-                                            baudrate=9600, 
-                                            bytesize=serial.EIGHTBITS,
-                                            parity=serial.PARITY_NONE,
-                                            stopbits=serial.STOPBITS_ONE,
-                                            timeout=1)
-            print_log(f'Connected to scale on {self.__serial_port}')
-            # Start watchdog thread
-            wd_thread = threading.Thread(target=self.__watch_dog_thread, daemon=True)   
-            self.__wd_stop.clear()
-            wd_thread.start()       
+            if not self.is_connected():
+                self.__connection = serial.Serial(self.__serial_port, 
+                                                baudrate=9600, 
+                                                bytesize=serial.EIGHTBITS,
+                                                parity=serial.PARITY_NONE,
+                                                stopbits=serial.STOPBITS_ONE,
+                                                timeout=1)
+                print_log(f'Connected to scale on {self.__serial_port}')
+                # Start watchdog thread
+                wd_thread = threading.Thread(target=self.__watch_dog_thread, daemon=True)   
+                self.__wd_stop.clear()
+                wd_thread.start()      
+            else:
+                self.disconnect()
             
             return True
         except Exception as e:
@@ -67,19 +69,45 @@ class WLCscale:
     def is_connected(self)->bool:
         return self.__connection is not None and self.__connection.is_open
     
+    def parse_weight(self, line:str)->float:
+        try:
+
+            # Parse a float from the line
+            weight = None
+            for token in line.split():
+                try:
+                    weight = float(token)
+                    break
+                except ValueError:
+                    continue
+            return weight if weight is not None else self.__current_weight
+        except Exception as e:
+            print_err(f'Error parsing weight: {e}')
+            exptTrace(e)
+            return self.__current_weight
+
+
+
     def read_weight(self)->float:   
         try:
+            line = ' '*50
             if self.__connection and self.__connection.is_open:
-                # self.__connection.write(b'READ\n')  # Command to read weight; replace with actual command
-                self.__connection.reset_input_buffer()
-                line = self.__connection.readline().decode('utf-8').strip()  # twice read to get fresh data 
-                                                                            # (in case of string was partially read)
-                line = self.__connection.readline().decode('utf-8').strip()
+                # # self.__connection.write(b'READ\n')  # Command to read weight; replace with actual command
+                # self.__connection.reset_input_buffer()
+                # line = self.__connection.readline().decode('utf-8').strip()  # twice read to get fresh data 
+                #                                                             # (in case of string was partially read)
+                # line = self.__connection.readline().decode('utf-8').strip()
+
+                line = self.__connection.readline().decode(errors="ignore").strip()
+                if not line:
+                    return None               
+                weight:float = self.parse_weight(line=line)
                 sign:int = -1 if line[5] == '-' else 1
-                weight:float = sign * float(line[6:15])
+                # weight:float = sign * float(line[6:15])
+                weight = sign * weight / 1000
                 return weight
             else:
-                print_log('Scale not connected')
+                print_err('Scale not connected')
                 return 0.0
         except Exception as e:
             print_err(f'Error reading weight: {e}')
@@ -92,6 +120,7 @@ class WLCscale:
             if self.__connection and self.__connection.is_open:
                 print_log('Disconnecting from scale...')
                 self.__connection.close()
+                self.__connection = None
             return True
         except Exception as e:
             print_err(f'Error disconnecting from scale: {e}')
@@ -103,9 +132,7 @@ class WLCscale:
         try:
             while not self.__wd_stop.is_set():
                 self.__current_weight = self.read_weight()  
-                pass                                # Monitor operation status
-                                
-
+                                                # Monitor operation status
                 if self.__wd_stop.wait(float(self.__poll_interval)):
                     break
                 # time.sleep(self.__poll_interval)
@@ -121,6 +148,7 @@ class WLCscale:
 
     @property
     def weight(self):
+        # print_DEBUG(f'W={self.__current_weight}')
         return self.__current_weight    
 
 

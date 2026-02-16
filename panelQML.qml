@@ -248,7 +248,7 @@ ApplicationWindow {
                                     Label { text: "Current Limit (mA):" }
                                     SpinBox { 
                                         id: currentLimit; 
-                                        from: 1; to: 5000; value: 2000; editable: true 
+                                        from: 1; to: 9000; value: 5000; editable: true 
                                         onValueModified:{
                                             let val = value;
                                             if (!isNaN(val) && val !== null) {
@@ -437,16 +437,16 @@ ApplicationWindow {
                                 Label { text: "Weight:" }
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    height: 80
+                                    height: 60
                                     color: "#0A0B0E" // Почти черный "экран"
                                     border.color: "#444"
                                     radius: 4
 
                                     Label {
                                         anchors.centerIn: parent
-                                        text: scaleController.weight.toFixed(2) + " kg"
+                                        text: scaleController.weight.toFixed(5) + " kg"
                                         color: "#00E5FF" // Цифровой голубой
-                                        font.pixelSize: 42
+                                        font.pixelSize: 32
                                         font.family: "Courier New"
                                     }
                                 }
@@ -472,7 +472,7 @@ ApplicationWindow {
                                         anchors.centerIn: parent
                                         // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.weight / runningTimer.seconds).toFixed(2) : "0.00") + " kg/s"
                                         // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.ROC).toFixed(2) : "0.00") + " kg/s"
-                                        text: "Rate of Change (ROC): " + (scaleController.ROC).toFixed(2)  + " kg/s"
+                                        text: "Rate of Change (ROC): " + (scaleController.ROC).toFixed(5)  + " l/m"
                                         color: "#FFA500" // Оранжевый для производных данных
                                         font.pixelSize: 20
                                     }
@@ -514,7 +514,7 @@ ApplicationWindow {
                                 
                                 ChartView {
                                     id: rocChart
-                                    title: "Скорость изменения (ROC)"
+                                    title: "Rate of Change (ROC)"
                                     // anchors.fill: parent // or set specific width/height 
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
@@ -527,33 +527,89 @@ ApplicationWindow {
                                     ValueAxis {
                                         id: axisX
                                         min: 0
-                                        max: 100 // Количество точек на экране
+                                        max: 500 // Количество точек на экране
                                         labelFormat: " " // Скрываем цифры времени, если они не важны
                                     }
 
                                     ValueAxis {
                                         id: axisY
                                         min: 0
-                                        max: 500 // Настройте под ваши рабочие диапазоны ROC
+                                        max: 10 // Настройте под ваши рабочие диапазоны ROC
+                                        labelsColor: "#2ecc71"
                                     }
+
+                                    ValueAxis {
+                                        id: axisVY
+                                        min: 0
+                                        max: 20000 // velocity
+                                        labelsColor: "#652ecc"
+                                    }
+
+                                    ValueAxis {
+                                        id: axisCY
+                                        min: 0
+                                        max: 5000 // current
+                                        labelsColor: "#cc2e87"
+
+                                    }
+
+                                    ValueAxis {
+                                        id: axisWY
+                                        min: 0
+                                        max: 10 // current
+                                        labelsColor: "#b4cc2e"
+
+                                    }
+
 
                                     LineSeries {
                                         id: rocSeries
-                                        name: "ROC (г/сек)"
+                                        name: "ROC (l/min)"
                                         axisX: axisX
                                         axisY: axisY
                                         color: "#2ecc71"
                                         width: 2
                                     }
+                                    LineSeries {
+                                        id: velSeries
+                                        name: "rpm (round/min)"
+                                        axisX: axisX
+                                        axisY: axisVY
+                                        color: "#652ecc"
+                                        width: 2
+                                    }
+                                    LineSeries {
+                                        id: curSeries
+                                        name: "Current (mA)"
+                                        axisX: axisX
+                                        axisY: axisCY
+                                        color: "#cc2e87"
+                                        width: 2
+                                    }
+
+                                    LineSeries {
+                                        id: weiSeries
+                                        name: "Weight (kg)"
+                                        axisX: axisX
+                                        axisY: axisWY
+                                        color: "#b4cc2e"
+                                        width: 2
+                                    }
+
+
+
                                     // Вспомогательная переменная для отслеживания "времени" (оси X)
                                     property int scrollTick: 0
 
                                     // Сама функция обновления
-                                    function updateChart(newValue) {
+                                    function updateChart(newRoc, newVel, newCur, newWei) {
                                         scrollTick++;
                                         
                                         // Добавляем новую точку
-                                        rocSeries.append(scrollTick, newValue);
+                                        rocSeries.append(scrollTick, newRoc);
+                                        velSeries.append(scrollTick, newVel);
+                                        curSeries.append(scrollTick, newCur);
+                                        weiSeries.append(scrollTick, newWei);
 
                                         // Если точек набралось больше, чем max оси X
                                         if (scrollTick > axisX.max) {
@@ -564,6 +620,9 @@ ApplicationWindow {
                                             // Удаляем самую старую точку из памяти, чтобы список не рос вечно
                                             if (rocSeries.count > 120) { // Держим чуть больше, чем max, для плавности
                                                 rocSeries.remove(0);
+                                                velSeries.remove(0);
+                                                curSeries.remove(0);
+                                                weiSeries.remove(0);
                                             }
                                         }
                                     }
@@ -572,7 +631,8 @@ ApplicationWindow {
                                     Connections {
                                         target: scaleController
                                         function onRocChanged() {
-                                            rocChart.updateChart(scaleController.ROC);
+                                            rocChart.updateChart(scaleController.ROC, motorController.velocity, 
+                                                        motorController.actualCurrent, scaleController.weight);
                                         }
                                     }
                                 }

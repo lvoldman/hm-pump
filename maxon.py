@@ -181,6 +181,7 @@ class MAXON_Motor:
     timeout = 500
     acceleration = 3000                            # rpm/s
     deceleration = 3000                            # rpm/s
+    default_curr_limit = 5000
 
 
     def __init__(self, mxnDev:MAXON_Motor.portSp):
@@ -188,7 +189,7 @@ class MAXON_Motor:
         self.MEASUREMENT_DELAY:float = 0.25
         self.MINIMAL_OP_DURATION:float = 0.25
         self.GRIPPER_TIMEOUT:float = 10
-        self.DEFAULT_CURRENT_LIMIT:int = 300
+        self.DEFAULT_CURRENT_LIMIT:int = 5000
         self.DEFAULT_ROTATION_TIME:float = 5
         self.DEAFULT_VELOCITY_EV_VOLTAGE:int = 5000
         self.DevMaxSPEED:int = 15000
@@ -209,7 +210,7 @@ class MAXON_Motor:
         self.mDev_pos:int = 0                                 #  current position 
         self.mDev_vel:int = 0                                 #  current velocity
         self.actual_current = 0                             # actual current value
-        self.el_current_limit:int = self.DEFAULT_CURRENT_LIMIT                       # electrical current limit to stop 
+        self.el_current_limit:int = MAXON_Motor.default_curr_limit                       # electrical current limit to stop 
         self.wd = None                                      # watch dog identificator
         self.mDev_SN = mxnDev.sn                                   # Serial N (0x1018:0x04)
         self.mDev_status = False                              # device status (bool) / used for succesful initiation validation

@@ -77,7 +77,7 @@ class servoMotor(QObject):
         self.__current_motor:MAXON_Motor.portSp | None = None    # Sp of the servo motor
         self.__wd_stop.clear()
         self.__timeout:float | None = None                  # Timeout for operations
-        self.__current_limit_mA:int = 300               # Current limit in mA
+        self.__current_limit_mA:int = MAXON_Motor.default_curr_limit               # Current limit in mA
         self._motor:motServo | None = None
 
                     
@@ -109,7 +109,7 @@ class servoMotor(QObject):
             self.__velocity = self._motor.mDev_get_cur_velocity()
             self.__actual_current = self._motor.mDev_get_actual_current()
             print_log(f'Servo motor {self._current_sn} initialized successfully: {self._motor }. Position={self.position} Velocity={self.velocity} Actual Current={self.actualCurrent}')
-
+            self.currentLimitChanged.emit()
             self._watch_dog_run()
         except Exception as ex:
             print_err(f'Error initializing servo motor {self._current_sn}: {ex}')
