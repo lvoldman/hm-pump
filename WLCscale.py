@@ -174,9 +174,11 @@ class WLCscaleStub:
     
     def update_serial_port(self, serial_port: str):
         print_log(f'Updating serial port to {self.__serial_port}-> {serial_port}')
+        self.__serial_port = serial_port
 
     def updatePollInterval(self, poll_interval: float):
         print_log(f'Updating poll interval to {self.__poll_interval}-> {poll_interval}')
+        self.__poll_interval = poll_interval
 
     def connect(self)->bool:
         print_log(f'Simulated connection to scale on {self.__serial_port}')

@@ -99,10 +99,12 @@ if __name__ == "__main__":
     qml_file = Path(__file__).parent / "panelQML.qml"
     engine.load(QUrl.fromLocalFile(str(qml_file)))       # Load the QML file
     
-
-    logging.shutdown()  # Ensure all logging messages are flushed before checking root objects
-    
+     
     if not engine.rootObjects():        # Check if root objects are loaded correctly
         sys.exit(-1)
 
-    sys.exit(app.exec())            # Start the application event loop and exit on completion
+    exit_code = app.exec()
+    logging.info("Application shutting down")
+
+    logging.shutdown()  # Ensure all logging messages are flushed before checking root objects
+    sys.exit(exit_code)            # Start the application event loop and exit on completion

@@ -113,35 +113,44 @@ class serialScale(QObject):
         # print_DEBUG(f'W={self._scale.weight if self._scale else 0.0}')
         return self._scale.weight if self._scale else 0.0   
 
-    @Property(float, notify=rocChanged)
-    def ROC(self):
+
+    def calcilateSmoothROC(self):
         __time = time.time()
-        new_weight = self._scale.weight if self._scale else 0.0
+        new_weight = self._scale.weight if self._scale else 0.0  # Get current weight, if scale is not available, assume weight is zero 
+                                                                # (or we could choose to return None or some error value)
         
-        if new_weight== 0:
-            return 0
+        if new_weight== 0:          # If weight is zero, we can assume that the scale is either not connected or not reading properly, 
+                                    # so we return 0 for ROC to avoid misleading values.
+            return 
         
         _roc:float = 0
         if __time != self.__last_time:          # Avoid division by zero 
-            _roc = (new_weight - self.__last_weight) * 60 / (__time - self.__last_time) 
+            _roc = (new_weight - self.__last_weight) / (__time - self.__last_time) 
 
         else:
-            _roc = self.__last_roc
+            return 
 
         self.delta_history.append(_roc)
 
-        if len(self.delta_history) ==  self.delta_history.maxlen:
-            _sum = sum(list(self.delta_history)[1:])
-            self.smooth_delta = _sum / (len(self.delta_history)-1)
-            # self.smooth_delta = sum(self.delta_history) / len(self.delta_history)
-        else:
-            self.smooth_delta = 0
+        self.smooth_delta = sum(self.delta_history) / len(self.delta_history)   # Simple moving average for smoothing, adjust as needed 
+                                                                                # (e.g., weighted average, exponential smoothing, etc.)
+
+        # print_DEBUG(f'ROC = {_roc}, {new_weight}-{self.__last_weight} = {self.__last_weight-new_weight} gr, time_diff={__time - self.__last_time if self.__last_time else "N/A"} P={self.smooth_delta}, len = {len(self.delta_history)}')
 
         self.__last_weight = new_weight 
         self.__last_time = __time
         self.__last_roc = _roc
-        # return _roc
-        return self.smooth_delta
+
+        return 
+
+
+
+
+
+
+    @Property(float, notify=rocChanged)
+    def ROC(self):
+        return self.smooth_delta  * 60  # Convert to per minute for better readability, adjust as needed
 
 
     @Property(bool, notify=connectionChanged)
@@ -215,10 +224,11 @@ class serialScale(QObject):
         
     def __watch_dog_thread(self):
         print_log(f'Watch dog thread started')
-        while not self.__wd_stop.is_set():
+        while True:
             try:
                 self.connectionChanged.emit(self.isConnected)                                # Monitor operation status
                 self.weightChanged.emit(self.weight)
+                self.calcilateSmoothROC()  # Update ROC based on current weight and time, this will update self.smooth_delta which is returned by ROC property
                 self.rocChanged.emit()
                 if self.__wd_stop.wait(float(self._poll_interval)):
                     break

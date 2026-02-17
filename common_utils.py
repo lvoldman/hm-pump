@@ -21,6 +21,10 @@ logFileDate = datetime.datetime.now().strftime(f"LOG_%Y_%m_%d_%H_%M.txt")
 log_format = u'%(asctime)s [%(levelname)s]: %(filename)s--%(funcName)s/%(lineno)d -- %(thread)d [%(threadName)s] %(message)s' 
 
 
+class InstantFileHandler(logging.FileHandler):
+    def emit(self, record):
+        super().emit(record)
+        self.flush()
 
 logging.basicConfig(format=log_format, handlers=[
             RichHandler(
@@ -30,11 +34,16 @@ logging.basicConfig(format=log_format, handlers=[
                 show_path=False,              # removes long file path (usually not needed)
                 console=Console(stderr=False),           # can be omitted - defaults to stdout
             ),
-            logging.FileHandler(logFileDate, mode="w", encoding = 'utf-8')
+                # logging.FileHandler(logFileDate, mode="w", encoding = 'utf-8')
+                InstantFileHandler(logFileDate, mode="w", encoding = 'utf-8')
             ],
         encoding = "utf8", level=logging.DEBUG)
 
+
+
 void_f = lambda a : None
+
+
 
 def logCleanup():                   # log cleanup at exit
     print_log(f"Log cleanup")
