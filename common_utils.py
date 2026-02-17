@@ -91,7 +91,7 @@ def assign_parm(devName:str, parms:dict, parName:str, _default=None):
     _val = get_parm(devName, parms, parName)
     return _val if _val is not None else _default
 
-def s16(value) -> int:
+def s16(value) -> int:              # convert unsigned 16 bit value to signed 16 bit value
     return -(value & 0x8000) | (value & 0x7fff)
 
 def s32(value)-> int: 

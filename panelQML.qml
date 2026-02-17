@@ -307,10 +307,11 @@ ApplicationWindow {
 
                                     Label { text: "Acceleration:" }
                                     SpinBox { enabled: !motorController.isMoving; id: acceleration; from: 10; to: 10000; value: 2000; editable: true }
-                                    Item { Layout.fillWidth: true }    // Spacer to push controls to the left, and prevent stretching of spinboxes when resizing
-                                    Item { Layout.fillWidth: true } 
+                                    // Item { Layout.fillWidth: true }    // Spacer to push controls to the left, and prevent stretching of spinboxes when resizing
+                                    // Item { Layout.fillWidth: true } 
 
-
+                                    Label { text: "Current torque:" }
+                                    TextField { readOnly: true; text: motorController?.actualTorque ?? "—" }
 
 
                                 }

@@ -70,6 +70,7 @@ class servoMotor(QObject):
         self.__position:int = 0                             # Current position of servo motor
         self.__velocity:int = 0                             # Current velocity of servo motor
         self.__actual_current:int = 0                       # Current actual current of servo motor
+        self.__actual_torque:int = 0                        # Current actual torque of servo motor
         self.__current_op:servoMotor.opType = servoMotor.opType.stoped          # Current operation
         self.__op_lock:threading.Lock = threading.Lock()  # Lock for current operation
         self.__start_time:float = 0.0                     # Start time of current operation
@@ -108,7 +109,8 @@ class servoMotor(QObject):
             self.__position = self._motor.mDev_get_cur_pos()
             self.__velocity = self._motor.mDev_get_cur_velocity()
             self.__actual_current = self._motor.mDev_get_actual_current()
-            print_log(f'Servo motor {self._current_sn} initialized successfully: {self._motor }. Position={self.position} Velocity={self.velocity} Actual Current={self.actualCurrent}')
+            self.__actual_torque = self._motor.mDev_get_actual_torque()
+            print_log(f'Servo motor {self._current_sn} initialized successfully: {self._motor }. Position={self.position} Velocity={self.velocity} Actual Current={self.actualCurrent} Actual Torque={self.actualTorque}')
             self.currentLimitChanged.emit()
             self._watch_dog_run()
         except Exception as ex:
@@ -217,6 +219,18 @@ class servoMotor(QObject):
             exptTrace(ex)
             return 0
         return self.__actual_current if self._motor else 0
+    
+    @Property(int, notify=positionChanged)
+    def actualTorque(self) -> int:
+        try:
+            if not self._motor:
+                return 0
+            self.__actual_torque = self._motor.mDev_get_actual_torque()
+        except Exception as ex:
+            print_err(f'Error getting actual torque for motor {self._current_sn}: {ex}')
+            exptTrace(ex)
+            return 0
+        return self.__actual_torque if self._motor else 0
     
     @Property(str, notify=stateChanged)
     def state(self) -> str:
@@ -422,13 +436,15 @@ class servoMotor(QObject):
             while not self.__wd_stop.is_set():
                 self.positionChanged.emit(self.position)                                # Monitor operation status
                 self.velocityChanged.emit(self.velocity)
-                self.actualCurrentChanged.emit(self.actualCurrent)
+                # self.actualCurrentChanged.emit(self.actualCurrent)
+                # self.positionChanged.emit(self.actualTorque)
                 
                 motor_exists = getattr(self, '_motor', None)    and self._motor is not None
                 if motor_exists:
                     self.__position = self.position           
                     self.__velocity = self.velocity                                # Monitor operation status
                     self.__actual_current = self.actualCurrent
+                    self.__actual_torque = self.actualTorque
                 else:   
                     print_err('Motor instance no longer exists, stopping watchdog thread')
                     time.sleep(0.5)
@@ -459,6 +475,7 @@ class servoMotor(QObject):
         self.positionChanged.emit(self.position)                                # Monitor operation status
         self.positionChanged.emit(self.velocity)
         self.positionChanged.emit(self.actualCurrent)
+        self.positionChanged.emit(self.actualTorque)
         # self.velocityChanged.emit(self.velocity)
         # self.actualCurrentChanged.emit(self.actualCurrent)
         return

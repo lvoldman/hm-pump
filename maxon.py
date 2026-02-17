@@ -133,9 +133,15 @@ STALL_CMD_LST =[
     ENABLE_CMD
 ]
 
+TORQUE_AVERAGE_VALUE = 0x30D2
+TORQUE_ACTUAL_VALUE = 0x6077
+
 QUCK_STOP_DEC_CMD = (QUCK_STOP_DEC, 0x00)
 
 STATUS_WORD_QUERY = (STATUSWORD, 0x00, 0x02 )
+
+TORQUE_AVERAGE_QUERY = (TORQUE_AVERAGE_VALUE, 0x01, 0x02 )
+TORQUE_ACTUAL_QUERY = (TORQUE_ACTUAL_VALUE, 0x00, 0x02 )
 
 DIG_INP_CNTL = 0x3142
 INP_POLARITY_CTL = 0x3141
@@ -232,6 +238,7 @@ class MAXON_Motor:
         self.diameter = self.DIAMETER
         self.gear = self.GEAR
         self.devName:str = mxnDev.sn
+        self.actual_torque = 0
         self.dev_lock = Lock()
         self.devNotificationQ = Queue()
 
@@ -1085,6 +1092,24 @@ class MAXON_Motor:
             
         self.mDev_watch_dog()
         return True  
+    
+    def mDev_get_actual_torque(self) -> int:
+        pTorqueIs = c_int32(0)
+        pErrorCode = c_uint()
+
+        _actualTorque = MAXON_Motor.MXN_cmd(self.mDev_port, [TORQUE_ACTUAL_QUERY], keyHandle=self.__keyHandle, nodeID=self.__nodeID, lock=MAXON_Motor.mxn_lock)
+
+        if len(_actualTorque) > 0:
+            actualTorqueValue:int = s16(_actualTorque[0].answData)  
+
+            self.actual_torque = actualTorqueValue
+             
+        else:
+            print_err(f'Getting Actual Torque Value on port  {self.mDev_port} failed. No response from device.')
+        
+        
+        return self.actual_torque   
+        
 
     def mDev_stall(self)->bool:
 
@@ -1365,6 +1390,8 @@ class MAXON_Motor_Stub:
         self.devName:str = mxnDev.sn
         self.mDev_port:str = mxnDev.port 
         self.devNotificationQ = Queue()
+        self.actual_torque = 0
+
         # self.mDev_get_cur_pos()
         # self.mDev_get_cur_velocity()
         print_log(f'({self.devName}) Serial number = {self.mDev_SN} Position = {self.mDev_pos} Velocity = {self.mDev_vel}')
@@ -1388,7 +1415,7 @@ class MAXON_Motor_Stub:
         return True
 
     def mDev_get_actual_current(self) -> int:
-        return self.actual_current
+        return self.actual_current 
         
 
     def _is_pos_reached(self, target_pos:int, ex_limit:int) -> bool:
@@ -1468,6 +1495,10 @@ class MAXON_Motor_Stub:
     def mDev_get_cur_pos(self) -> int:
         return self.mDev_pos       
      
+    def mDev_get_actual_torque(self) -> int:
+        km = 15
+        return self.actual_current * km   
+
     def mDev_get_cur_velocity(self) -> int:
         return self.mDev_vel
     
