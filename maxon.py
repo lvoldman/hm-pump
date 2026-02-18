@@ -822,6 +822,7 @@ class MAXON_Motor:
         self.devNotificationQ.queue.clear()        # clear notification queue
 
         max_GRC:int = 0
+        print_log(f' WatchDog MAXON: Starting monitoring loop for port = {self.mDev_port}, position = {self.mDev_pos}, el_current_limit = {self.el_current_limit} mA, time_control_mode = {self.time_control_mode}, rotationTime = {self.rotationTime} sec, possition_control_mode = {self.possition_control_mode} ')
         while (not self.__stop_motion.is_set()):
             try:
                 pCurrentIs = c_int32(0)

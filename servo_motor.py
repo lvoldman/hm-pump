@@ -9,8 +9,8 @@ from common_utils import print_err, print_DEBUG, print_warn, print_log, exptTrac
                         print_call_stack
 from shiboken6 import isValid
 
-motServo = MAXON_Motor_Stub # For testing purposes, replace with MAXON_Motor for actual implementation
-# motServo = MAXON_Motor      #   For actual implementation
+# motServo = MAXON_Motor_Stub # For testing purposes, replace with MAXON_Motor for actual implementation
+motServo = MAXON_Motor      #   For actual implementation
 
 @dataclass
 class servoParameters:

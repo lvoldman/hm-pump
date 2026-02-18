@@ -80,6 +80,9 @@ class WLCscale:
                     break
                 except ValueError:
                     continue
+            else:
+                print_err(f'No valid weight found in line: "{line}"')
+
             return weight if weight is not None else self.__current_weight
         except Exception as e:
             print_err(f'Error parsing weight: {e}')
@@ -98,17 +101,20 @@ class WLCscale:
                 #                                                             # (in case of string was partially read)
                 # line = self.__connection.readline().decode('utf-8').strip()
 
-                line = self.__connection.readline().decode(errors="ignore").strip()
-                if not line:
-                    return None               
+                line = self.__connection.readline().decode(errors="ignore").strip()   # Read line from scale, ignore decode errors to avoid issues with non-UTF-8 characters
+                if not line:                                                           # If no data is read, return the last known weight
+                    print_warn('No data read from scale, returning last known weight')
+                    return self.__current_weight                  
+                
                 weight:float = self.parse_weight(line=line)
                 sign:int = -1 if line[5] == '-' else 1
                 # weight:float = sign * float(line[6:15])
                 weight = sign * weight 
                 return weight
             else:
-                print_err('Scale not connected')
-                return 0.0
+                print_err('Scale is not connected')
+                return self.__current_weight
+            
         except Exception as e:
             print_err(f'Error reading weight: {e}')
             exptTrace(e)
@@ -128,7 +134,7 @@ class WLCscale:
             return False
         
     def __watch_dog_thread(self):
-        
+        print_log('Watchdog thread started for scale monitoring...')
         try:
             while not self.__wd_stop.is_set():
                 self.__current_weight = self.read_weight()  
@@ -139,6 +145,8 @@ class WLCscale:
         except Exception as e:
             print_err(f'Error in watch dog thread: {e}')
             exptTrace(e)
+
+        print_log('Watchdog thread stopped for scale monitoring.')
 
 
     def __del__(self):

@@ -7,8 +7,8 @@ from collections import deque
 from common_utils import print_err, print_DEBUG, print_warn, print_log, exptTrace, print_trace, \
                         print_call_stack
 
-Scale = WLCscaleStub  # For testing without actual scale, replace with WLCscale for real scale
-# Scale = WLCscale         # For production
+# Scale = WLCscaleStub  # For testing without actual scale, replace with WLCscale for real scale
+Scale = WLCscale         # For production
 
 
 class serialScale(QObject):
@@ -27,7 +27,7 @@ class serialScale(QObject):
 
     def __init__(self, serial_port: str = None, poll_interval: float = 0.1, parent=None):
         super().__init__(parent)
-        self._port = serial_port if serial_port else (serialScale.listScales()[0] if serialScale.listScales() else "")
+        # self._port = serial_port if serial_port else (serialScale.listScales()[0] if serialScale.listScales() else "")
         self._weight = 0.0
         self.__last_weight = 0                          # For calculating rate of change (ROC)
         self.__last_time = time.time()                  # For calculating rate of change (ROC)
@@ -52,11 +52,14 @@ class serialScale(QObject):
                                                         # handle cases where weight doesn't change but we still want to update ROC based on time.
         # self.counterChanged.connect(self.rocChanged)
 
+
         if serialScale._scales is None:
             print_log('Listing scales for the first time in serialScale init')
             serialScale._scales = serialScale.listScales()
 
+
         self._port = serial_port if serial_port else (serialScale._scales[0] if serialScale._scales else "")
+
         print_log(f'Available scales: {serialScale._scales}, requested port: {self._port}')
 
         if not self._port:
@@ -66,11 +69,14 @@ class serialScale(QObject):
         if self._port not in serialScale._scales:
             raise ValueError(f'Serial scale with port {self._port} not found among available ports: {serialScale._scales}')
         
-        if self._port is not None:
+        if self._port:
             self._scale = Scale(self._port, poll_interval)
         else:
             raise ValueError('No serial port specified for serialScale')
         
+        if self._port and self._scale is not None:
+            self.connect( ) 
+
         self._connected = self.isConnected
 
     def __del__(self):
@@ -156,8 +162,9 @@ class serialScale(QObject):
 
     @Property(bool, notify=connectionChanged)
     def isConnected(self):
+        self._connected = self._scale.is_connected() if self._scale else False
         # print_DEBUG(f'Checking connection status for scale on port {self._port}: {self._scale} ->{self._scale.is_connected() if self._scale else False}')
-        return self._scale.is_connected() if self._scale else False
+        return self._connected
     
     @Slot(result=bool)
     def disconnect(self)->bool:
@@ -228,7 +235,14 @@ class serialScale(QObject):
         while True:
             try:
                 self.connectionChanged.emit(self.isConnected)                                # Monitor operation status
-                self.weightChanged.emit(self.weight)
+
+                if self._scale and self._scale.is_connected():
+                    self.weightChanged.emit(self.weight)
+                else:
+                    if self._scale:                 # connection lost, but we have a scale instance, so we can try to reconnect
+                        print_warn(f'Scale on port {self._port} is not connected or not available. Reconnecting...')
+                        self.connect()
+
                 self.calcilateSmoothROC()  # Update ROC based on current weight and time, this will update self.smooth_delta which is returned by ROC property
                 self.rocChanged.emit()
                 if self.__wd_stop.wait(float(self._poll_interval)):
