@@ -111,7 +111,8 @@ class serialScale(QObject):
     @Property(float, notify=weightChanged)
     def weight(self):
         # print_DEBUG(f'W={self._scale.weight if self._scale else 0.0}')
-        return self._scale.weight if self._scale else 0.0   
+        return self._scale.weight / 1000 if self._scale else 0.0    # Convert to kg for better readability, adjust as needed 
+                                                                    # (e.g., keep in grams, convert litters, etc.)
 
 
     def calcilateSmoothROC(self):
@@ -135,7 +136,7 @@ class serialScale(QObject):
         self.smooth_delta = sum(self.delta_history) / len(self.delta_history)   # Simple moving average for smoothing, adjust as needed 
                                                                                 # (e.g., weighted average, exponential smoothing, etc.)
 
-        # print_DEBUG(f'ROC = {_roc}, {new_weight}-{self.__last_weight} = {self.__last_weight-new_weight} gr, time_diff={__time - self.__last_time if self.__last_time else "N/A"} P={self.smooth_delta}, len = {len(self.delta_history)}')
+        # print_DEBUG(f'ROC = {_roc}, {new_weight}-{self.__last_weight} = {new_weight - self.__last_weight} gr, time_diff={__time - self.__last_time if self.__last_time else "N/A"} P={self.smooth_delta}, len = {len(self.delta_history)}')
 
         self.__last_weight = new_weight 
         self.__last_time = __time
@@ -150,7 +151,7 @@ class serialScale(QObject):
 
     @Property(float, notify=rocChanged)
     def ROC(self):
-        return self.smooth_delta  * 60  # Convert to per minute for better readability, adjust as needed
+        return self.smooth_delta / 1000  * 60  # Convert to per minute for better readability, adjust as needed
 
 
     @Property(bool, notify=connectionChanged)

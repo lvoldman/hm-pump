@@ -104,7 +104,7 @@ class WLCscale:
                 weight:float = self.parse_weight(line=line)
                 sign:int = -1 if line[5] == '-' else 1
                 # weight:float = sign * float(line[6:15])
-                weight = sign * weight / 1000
+                weight = sign * weight 
                 return weight
             else:
                 print_err('Scale not connected')
@@ -161,15 +161,21 @@ class WLCscaleStub:
     
     def __init__(self, serial_port: str, poll_interval: float = 0.1):
         self.__wd_stop:threading.Event = threading.Event() # Event to stop watchdog thread
-        self.__test_weight =random.randint(200, 9500)/100.0
+        self.__test_weight = 0
         self.__poll_interval = poll_interval
         self.__serial_port = serial_port
+        self.__current_time = time.time()
 
     def read_weight(self)->float:
         # Simulate weight reading with random value and
-        sign = -1 if random.randint(0,1) == 0 else 1
-        self.__test_weight +=  random.randint(200, 500)/100.0*sign
-        self.__test_weight = max(0.0, self.__test_weight)  # Ensure weight doesn't go below 0
+        # sign:int = -1 if random.randint(0,1) == 0 else 1
+        # self.__test_weight +=  random.randint(200, 500)/100.0*sign
+        # self.__test_weight = max(0.0, self.__test_weight)  # Ensure weight doesn't go below 0
+        if self.__current_time == 0 or time.time() - self.__current_time > self.__poll_interval:  # Update weight every X seconds or if it's the first read
+            delta_weight = random.randint(1, 3) * 10  # Simulate weight change in grams 
+            self.__test_weight = self.__test_weight + delta_weight  # Simulate weight increase, adjust logic as needed (e.g., random walk, specific patterns, etc.)
+            # print_DEBUG(f'[Stub] Updated weight to {self.__test_weight} g')
+            self.__current_time = time.time()
         return self.__test_weight
     
     def update_serial_port(self, serial_port: str):
