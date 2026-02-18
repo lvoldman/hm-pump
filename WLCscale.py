@@ -50,7 +50,7 @@ class WLCscale:
                                                 bytesize=serial.EIGHTBITS,
                                                 parity=serial.PARITY_NONE,
                                                 stopbits=serial.STOPBITS_ONE,
-                                                timeout=1)
+                                                timeout=0.5)
                 print_log(f'Connected to scale on {self.__serial_port}')
                 # Start watchdog thread
                 wd_thread = threading.Thread(target=self.__watch_dog_thread, daemon=True)   
@@ -100,7 +100,7 @@ class WLCscale:
                 # line = self.__connection.readline().decode('utf-8').strip()  # twice read to get fresh data 
                 #                                                             # (in case of string was partially read)
                 # line = self.__connection.readline().decode('utf-8').strip()
-
+                self.__connection.reset_input_buffer()
                 line = self.__connection.readline().decode(errors="ignore").strip()   # Read line from scale, ignore decode errors to avoid issues with non-UTF-8 characters
                 if not line:                                                           # If no data is read, return the last known weight
                     print_warn('No data read from scale, returning last known weight')
@@ -109,11 +109,13 @@ class WLCscale:
                 weight:float = self.parse_weight(line=line)
                 sign:int = -1 if line[5] == '-' else 1
                 # weight:float = sign * float(line[6:15])
-                weight = sign * weight 
-                return weight
+                weight = sign * weight
+                self.__current_weight = weight
+                # print_DEBUG(f'READ_WEIGHT={weight}')
             else:
                 print_err('Scale is not connected')
-                return self.__current_weight
+
+            return self.__current_weight
             
         except Exception as e:
             print_err(f'Error reading weight: {e}')
@@ -146,7 +148,7 @@ class WLCscale:
             print_err(f'Error in watch dog thread: {e}')
             exptTrace(e)
 
-        print_log('Watchdog thread stopped for scale monitoring.')
+        print_warn('Watchdog thread stopped for scale monitoring.')
 
 
     def __del__(self):

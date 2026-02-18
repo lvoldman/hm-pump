@@ -435,48 +435,107 @@ ApplicationWindow {
                                         console.log("Port selected: " + "number " + index + " " + model[index])
                                     }
                                 }
-                                Label { text: "Weight:" }
-                                Rectangle {
+                                
+                                GridLayout {
+                                    columns: 4
                                     Layout.fillWidth: true
-                                    height: 60
-                                    color: "#0A0B0E" // Почти черный "экран"
-                                    border.color: "#444"
-                                    radius: 4
+                                    // enabled: !motorController.isMoving   // Disable while motor is moving
+                                    opacity: enabled ? 1.0 : 0.5 // Visual feedback when disabled
+                                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                                    Label { text: "Weight:" }
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        height: 40
+                                        color: "#0A0B0E" // Почти черный "экран"
+                                        border.color: "#444"
+                                        radius: 4
 
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: scaleController.weight.toFixed(5) + " kg"
-                                        color: "#00E5FF" // Цифровой голубой
-                                        font.pixelSize: 32
-                                        font.family: "Courier New"
+                                        Label {
+                                            anchors.centerIn: parent
+                                            // text: scaleController.weight.toFixed(5) + " kg"
+                                            text: scaleController.weight.toFixed(3)  + " kg"
+                                            color: "#00E5FF" // Цифровой голубой
+                                            font.pixelSize: 25
+                                            minimumPixelSize: 8
+                                            fontSizeMode: Text.Fit
+                                            font.family: "Courier New"
+                                        }
                                     }
-                                }
-                                // TextField {
-                                //     id: weightDisplay
-                                //     Layout.fillWidth: true
-                                //     readOnly: true
-                                //     color: "#00E5FF" // Neon blue color for weight display
-                                //     font.family: "Courier New" // Industrial style
-                                //     font.pixelSize: 32
-                                //     background: Rectangle { color: "#0A0C10"; radius: 2 }
-                                //     horizontalAlignment: Text.AlignHCenter
-                                //     text: scaleController.weight ? scaleController.weight.toFixed(2) + " kg" : "—"
-                                // }
+                                    // TextField {
+                                    //     id: weightDisplay
+                                    //     Layout.fillWidth: true
+                                    //     readOnly: true
+                                    //     color: "#00E5FF" // Neon blue color for weight display
+                                    //     font.family: "Courier New" // Industrial style
+                                    //     font.pixelSize: 32
+                                    //     background: Rectangle { color: "#0A0C10"; radius: 2 }
+                                    //     horizontalAlignment: Text.AlignHCenter
+                                    //     text: scaleController.weight ? scaleController.weight.toFixed(2) + " kg" : "—"
+                                    // }
 
-                                Label { text: "Power=W/T:" }
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    height: 60
-                                    color: "#0A0B0E"
-                                    border.color: "#444"
-                                    Label {
-                                        anchors.centerIn: parent
-                                        // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.weight / runningTimer.seconds).toFixed(2) : "0.00") + " kg/s"
-                                        // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.ROC).toFixed(2) : "0.00") + " kg/s"
-                                        text: "Rate of Change (ROC): " + (scaleController.ROC).toFixed(5)  + " l/m"
-                                        color: "#FFA500" // Оранжевый для производных данных
-                                        font.pixelSize: 20
+
+                                    Label { text: "I =" }
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        height: 40
+                                        color: "#0A0B0E" // Почти черный "экран"
+                                        border.color: "#444"
+                                        radius: 4
+
+                                        Label {
+                                            anchors.centerIn: parent
+                                            // text: scaleController.weight.toFixed(5) + " kg"
+                                            text: motorController.actualCurrent + " mA"
+                                            color: "#00E5FF" // Цифровой голубой
+                                            font.pixelSize: 25
+                                            minimumPixelSize: 8
+                                            fontSizeMode: Text.Fit
+                                            font.family: "Courier New"
+                                        }
                                     }
+
+                                    Label { text: "rpm=" }
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        height: 40
+                                        color: "#0A0B0E" // Почти черный "экран"
+                                        border.color: "#444"
+                                        radius: 4
+
+                                        Label {
+                                            anchors.centerIn: parent
+                                            // text: scaleController.weight.toFixed(5) + " kg"
+                                            text: motorController.velocity + " r/m"
+                                            color: "#00E5FF" // Цифровой голубой
+                                            font.pixelSize: 25
+                                            minimumPixelSize: 8
+                                            fontSizeMode: Text.Fit
+                                            font.family: "Courier New"
+                                        }
+                                    }
+
+                                    Label { text: "Q(dw/dt)=" }
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        height: 40
+                                        color: "#0A0B0E"
+                                        border.color: "#444"
+                                        Label {
+                                            anchors.centerIn: parent
+                                            // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.weight / runningTimer.seconds).toFixed(2) : "0.00") + " kg/s"
+                                            // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.ROC).toFixed(2) : "0.00") + " kg/s"
+                                            // text: "Q = " + (scaleController.ROC).toFixed(5)  + " l/m"
+                                            text: (scaleController.ROC).toFixed(3)
+                                            // color: "#FFA500" // Оранжевый для производных данных
+                                            color: "#00E5FF" // Blue
+                                            // font.pixelSize: 20
+                                            font.pixelSize: 25
+                                            minimumPixelSize: 8
+                                            fontSizeMode: Text.Fit
+
+                                        }
+                                    }
+
                                 }
                                 // TextField {
                                 //     Layout.fillWidth: true
@@ -519,7 +578,7 @@ ApplicationWindow {
                                     // anchors.fill: parent // or set specific width/height 
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
-                                    Layout.preferredHeight: 300 // minimum height for good visibility
+                                    Layout.preferredHeight: 500 // minimum height for good visibility
                                     enabled: !motorController.isMoving;
 
                                     antialiasing: true
@@ -554,13 +613,13 @@ ApplicationWindow {
 
                                     }
 
-                                    ValueAxis {
-                                        id: axisWY
-                                        min: 0
-                                        max: 10 // current
-                                        labelsColor: "#b4cc2e"
+                                    // ValueAxis {
+                                    //     id: axisWY
+                                    //     min: 0
+                                    //     max: 10 // current
+                                    //     labelsColor: "#b4cc2e"
 
-                                    }
+                                    // }
 
 
                                     LineSeries {
@@ -588,14 +647,14 @@ ApplicationWindow {
                                         width: 2
                                     }
 
-                                    LineSeries {
-                                        id: weiSeries
-                                        name: "Weight (kg)"
-                                        axisX: axisX
-                                        axisY: axisWY
-                                        color: "#b4cc2e"
-                                        width: 2
-                                    }
+                                    // LineSeries {
+                                    //     id: weiSeries
+                                    //     name: "Weight (kg)"
+                                    //     axisX: axisX
+                                    //     axisY: axisWY
+                                    //     color: "#b4cc2e"
+                                    //     width: 2
+                                    // }
 
 
 
@@ -610,7 +669,7 @@ ApplicationWindow {
                                         rocSeries.append(scrollTick, newRoc);
                                         velSeries.append(scrollTick, newVel);
                                         curSeries.append(scrollTick, newCur);
-                                        weiSeries.append(scrollTick, newWei);
+                                        // weiSeries.append(scrollTick, newWei);
 
                                         // Если точек набралось больше, чем max оси X
                                         if (scrollTick > axisX.max) {
@@ -623,7 +682,7 @@ ApplicationWindow {
                                                 rocSeries.remove(0);
                                                 velSeries.remove(0);
                                                 curSeries.remove(0);
-                                                weiSeries.remove(0);
+                                                // weiSeries.remove(0);
                                             }
                                         }
                                     }
