@@ -258,7 +258,7 @@ ApplicationWindow {
                                         }
                                     }
                                     Label { text: "Actual current (mA):" }
-                                    TextField { readOnly: true; text: motorController?.actualCurrent ?? "—" }
+                                    TextField { readOnly: true; color: "#FFA500"; text: motorController?.actualCurrent ?? "—" }
                                 }
                                 
                                 //  Absolute move controls
@@ -303,7 +303,7 @@ ApplicationWindow {
 
 
                                     Label { text: "Current velocity:" }
-                                    TextField { readOnly: true; text: motorController?.velocity ?? "—" }
+                                    TextField { readOnly: true; color: "#FFA500"; text: motorController?.velocity ?? "—" }
 
                                     Label { text: "Acceleration:" }
                                     SpinBox { enabled: !motorController.isMoving; id: acceleration; from: 10; to: 10000; value: 2000; editable: true }
@@ -311,7 +311,7 @@ ApplicationWindow {
                                     // Item { Layout.fillWidth: true } 
 
                                     Label { text: "Current torque:" }
-                                    TextField { readOnly: true; text: motorController?.actualTorque ?? "—" }
+                                    TextField { readOnly: true; color: "#FFA500"; text: motorController?.actualTorque ?? "—" }
 
 
                                 }
@@ -323,14 +323,14 @@ ApplicationWindow {
                                     columns: 2
                                     Label { text: "Current position:" }
                                     // TextField { readOnly: true; text: motorController.currentMotor?.position ?? "—" }
-                                    TextField { readOnly: true; text: motorController?.position ?? "—" }
+                                    TextField { readOnly: true; color: "#FFA500"; text: motorController?.position ?? "—" }
 
                                     
                                     // Label { text: "Current velocity:" }
                                     // TextField { readOnly: true; text: motorController?.velocity ?? "—" }
 
                                     Label { text: "Running time:" }
-                                    TextField { id: runtimeDisplay; readOnly: true; text: "00:00:00" }
+                                    TextField { id: runtimeDisplay; readOnly: true; color: "#FFA500"; text: "00:00:00" }
                                 }
 
                                 Timer {
@@ -445,7 +445,7 @@ ApplicationWindow {
                                     Label { text: "Weight:" }
                                     Rectangle {
                                         Layout.fillWidth: true
-                                        height: 40
+                                        height: 30
                                         color: "#0A0B0E" // Почти черный "экран"
                                         border.color: "#444"
                                         radius: 4
@@ -454,8 +454,9 @@ ApplicationWindow {
                                             anchors.centerIn: parent
                                             // text: scaleController.weight.toFixed(5) + " kg"
                                             text: scaleController.weight.toFixed(3)  + " kg"
-                                            color: "#00E5FF" // Цифровой голубой
-                                            font.pixelSize: 25
+                                            // color: "#00E5FF" // Цифровой голубой
+                                            color: "#FFA500" // Оранжевый для производных данных
+                                            font.pixelSize: 20
                                             minimumPixelSize: 8
                                             fontSizeMode: Text.Fit
                                             font.family: "Courier New"
@@ -477,7 +478,7 @@ ApplicationWindow {
                                     Label { text: "I =" }
                                     Rectangle {
                                         Layout.fillWidth: true
-                                        height: 40
+                                        height: 30
                                         color: "#0A0B0E" // Почти черный "экран"
                                         border.color: "#444"
                                         radius: 4
@@ -486,57 +487,59 @@ ApplicationWindow {
                                             anchors.centerIn: parent
                                             // text: scaleController.weight.toFixed(5) + " kg"
                                             text: motorController.actualCurrent + " mA"
-                                            color: "#00E5FF" // Цифровой голубой
-                                            font.pixelSize: 25
+                                            // color: "#00E5FF" // Цифровой голубой
+                                            color: "#FFA500" // Оранжевый для производных данных
+                                            font.pixelSize: 20
                                             minimumPixelSize: 8
                                             fontSizeMode: Text.Fit
                                             font.family: "Courier New"
                                         }
                                     }
-
-                                    Label { text: "rpm=" }
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        height: 40
-                                        color: "#0A0B0E" // Почти черный "экран"
-                                        border.color: "#444"
-                                        radius: 4
-
-                                        Label {
-                                            anchors.centerIn: parent
-                                            // text: scaleController.weight.toFixed(5) + " kg"
-                                            text: motorController.velocity + " r/m"
-                                            color: "#00E5FF" // Цифровой голубой
-                                            font.pixelSize: 25
-                                            minimumPixelSize: 8
-                                            fontSizeMode: Text.Fit
-                                            font.family: "Courier New"
-                                        }
-                                    }
-
-                                    Label { text: "Q(dw/dt)=" }
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        height: 40
-                                        color: "#0A0B0E"
-                                        border.color: "#444"
-                                        Label {
-                                            anchors.centerIn: parent
-                                            // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.weight / runningTimer.seconds).toFixed(2) : "0.00") + " kg/s"
-                                            // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.ROC).toFixed(2) : "0.00") + " kg/s"
-                                            // text: "Q = " + (scaleController.ROC).toFixed(5)  + " l/m"
-                                            text: (scaleController.ROC).toFixed(3)
-                                            // color: "#FFA500" // Оранжевый для производных данных
-                                            color: "#00E5FF" // Blue
-                                            // font.pixelSize: 20
-                                            font.pixelSize: 25
-                                            minimumPixelSize: 8
-                                            fontSizeMode: Text.Fit
-
-                                        }
-                                    }
-
                                 }
+
+                                Label { text: "rpm=" }
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    height: 50
+                                    color: "#0A0B0E" // Почти черный "экран"
+                                    border.color: "#444"
+                                    radius: 4
+
+                                    Label {
+                                        anchors.centerIn: parent
+                                        // text: scaleController.weight.toFixed(5) + " kg"
+                                        text: motorController.velocity + " r/m"
+                                        color: "#00E5FF" // Цифровой голубой
+                                        font.pixelSize: 40
+                                        minimumPixelSize: 8
+                                        fontSizeMode: Text.Fit
+                                        font.family: "Courier New"
+                                    }
+                                }
+
+                                Label { text: "Q(dw/dt)=" }
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    height: 50
+                                    color: "#0A0B0E"
+                                    border.color: "#444"
+                                    Label {
+                                        anchors.centerIn: parent
+                                        // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.weight / runningTimer.seconds).toFixed(2) : "0.00") + " kg/s"
+                                        // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.ROC).toFixed(2) : "0.00") + " kg/s"
+                                        // text: "Q = " + (scaleController.ROC).toFixed(5)  + " l/m"
+                                        text: (scaleController.ROC).toFixed(3)
+                                        // color: "#FFA500" // Оранжевый для производных данных
+                                        color: "#00E5FF" // Blue
+                                        // font.pixelSize: 20
+                                        font.pixelSize: 40
+                                        minimumPixelSize: 8
+                                        fontSizeMode: Text.Fit
+
+                                    }
+                                }
+
+                                
                                 // TextField {
                                 //     Layout.fillWidth: true
                                 //     readOnly: true
@@ -572,130 +575,130 @@ ApplicationWindow {
                                     }
                                 }
                                 
-                                ChartView {
-                                    id: rocChart
-                                    title: "Rate of Change (ROC)"
-                                    // anchors.fill: parent // or set specific width/height 
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    Layout.preferredHeight: 500 // minimum height for good visibility
-                                    enabled: !motorController.isMoving;
+                                // ChartView {
+                                //     id: rocChart
+                                //     title: "Rate of Change (ROC)"
+                                //     // anchors.fill: parent // or set specific width/height 
+                                //     Layout.fillWidth: true
+                                //     Layout.fillHeight: true
+                                //     Layout.preferredHeight: 500 // minimum height for good visibility
+                                //     enabled: !motorController.isMoving;
 
-                                    antialiasing: true
-                                    theme: ChartView.ChartThemeLight
+                                //     antialiasing: true
+                                //     theme: ChartView.ChartThemeLight
 
-                                    ValueAxis {
-                                        id: axisX
-                                        min: 0
-                                        max: 500 // Количество точек на экране
-                                        labelFormat: " " // Скрываем цифры времени, если они не важны
-                                    }
+                                //     ValueAxis {
+                                //         id: axisX
+                                //         min: 0
+                                //         max: 500 // Количество точек на экране
+                                //         labelFormat: " " // Скрываем цифры времени, если они не важны
+                                //     }
 
-                                    ValueAxis {
-                                        id: axisY
-                                        min: 0
-                                        max: 10 // Настройте под ваши рабочие диапазоны ROC
-                                        labelsColor: "#2ecc71"
-                                    }
+                                //     ValueAxis {
+                                //         id: axisY
+                                //         min: 0
+                                //         max: 10 // Настройте под ваши рабочие диапазоны ROC
+                                //         labelsColor: "#2ecc71"
+                                //     }
 
-                                    ValueAxis {
-                                        id: axisVY
-                                        min: 0
-                                        max: 20000 // velocity
-                                        labelsColor: "#652ecc"
-                                    }
+                                //     ValueAxis {
+                                //         id: axisVY
+                                //         min: 0
+                                //         max: 20000 // velocity
+                                //         labelsColor: "#652ecc"
+                                //     }
 
-                                    ValueAxis {
-                                        id: axisCY
-                                        min: 0
-                                        max: 5000 // current
-                                        labelsColor: "#cc2e87"
+                                //     ValueAxis {
+                                //         id: axisCY
+                                //         min: 0
+                                //         max: 5000 // current
+                                //         labelsColor: "#cc2e87"
 
-                                    }
+                                //     }
 
-                                    // ValueAxis {
-                                    //     id: axisWY
-                                    //     min: 0
-                                    //     max: 10 // current
-                                    //     labelsColor: "#b4cc2e"
+                                //     // ValueAxis {
+                                //     //     id: axisWY
+                                //     //     min: 0
+                                //     //     max: 10 // current
+                                //     //     labelsColor: "#b4cc2e"
 
-                                    // }
-
-
-                                    LineSeries {
-                                        id: rocSeries
-                                        name: "ROC (l/min)"
-                                        axisX: axisX
-                                        axisY: axisY
-                                        color: "#2ecc71"
-                                        width: 2
-                                    }
-                                    LineSeries {
-                                        id: velSeries
-                                        name: "rpm (round/min)"
-                                        axisX: axisX
-                                        axisY: axisVY
-                                        color: "#652ecc"
-                                        width: 2
-                                    }
-                                    LineSeries {
-                                        id: curSeries
-                                        name: "Current (mA)"
-                                        axisX: axisX
-                                        axisY: axisCY
-                                        color: "#cc2e87"
-                                        width: 2
-                                    }
-
-                                    // LineSeries {
-                                    //     id: weiSeries
-                                    //     name: "Weight (kg)"
-                                    //     axisX: axisX
-                                    //     axisY: axisWY
-                                    //     color: "#b4cc2e"
-                                    //     width: 2
-                                    // }
+                                //     // }
 
 
+                                //     LineSeries {
+                                //         id: rocSeries
+                                //         name: "ROC (l/min)"
+                                //         axisX: axisX
+                                //         axisY: axisY
+                                //         color: "#2ecc71"
+                                //         width: 2
+                                //     }
+                                //     LineSeries {
+                                //         id: velSeries
+                                //         name: "rpm (round/min)"
+                                //         axisX: axisX
+                                //         axisY: axisVY
+                                //         color: "#652ecc"
+                                //         width: 2
+                                //     }
+                                //     LineSeries {
+                                //         id: curSeries
+                                //         name: "Current (mA)"
+                                //         axisX: axisX
+                                //         axisY: axisCY
+                                //         color: "#cc2e87"
+                                //         width: 2
+                                //     }
 
-                                    // Вспомогательная переменная для отслеживания "времени" (оси X)
-                                    property int scrollTick: 0
+                                //     // LineSeries {
+                                //     //     id: weiSeries
+                                //     //     name: "Weight (kg)"
+                                //     //     axisX: axisX
+                                //     //     axisY: axisWY
+                                //     //     color: "#b4cc2e"
+                                //     //     width: 2
+                                //     // }
 
-                                    // Сама функция обновления
-                                    function updateChart(newRoc, newVel, newCur, newWei) {
-                                        scrollTick++;
+
+
+                                //     // Вспомогательная переменная для отслеживания "времени" (оси X)
+                                //     property int scrollTick: 0
+
+                                //     // Сама функция обновления
+                                //     function updateChart(newRoc, newVel, newCur, newWei) {
+                                //         scrollTick++;
                                         
-                                        // Добавляем новую точку
-                                        rocSeries.append(scrollTick, newRoc);
-                                        velSeries.append(scrollTick, newVel);
-                                        curSeries.append(scrollTick, newCur);
-                                        // weiSeries.append(scrollTick, newWei);
+                                //         // Добавляем новую точку
+                                //         rocSeries.append(scrollTick, newRoc);
+                                //         velSeries.append(scrollTick, newVel);
+                                //         curSeries.append(scrollTick, newCur);
+                                //         // weiSeries.append(scrollTick, newWei);
 
-                                        // Если точек набралось больше, чем max оси X
-                                        if (scrollTick > axisX.max) {
-                                            // Сдвигаем окно видимости осей
-                                            axisX.min++;
-                                            axisX.max++;
+                                //         // Если точек набралось больше, чем max оси X
+                                //         if (scrollTick > axisX.max) {
+                                //             // Сдвигаем окно видимости осей
+                                //             axisX.min++;
+                                //             axisX.max++;
                                             
-                                            // Удаляем самую старую точку из памяти, чтобы список не рос вечно
-                                            if (rocSeries.count > 120) { // Держим чуть больше, чем max, для плавности
-                                                rocSeries.remove(0);
-                                                velSeries.remove(0);
-                                                curSeries.remove(0);
-                                                // weiSeries.remove(0);
-                                            }
-                                        }
-                                    }
+                                //             // Удаляем самую старую точку из памяти, чтобы список не рос вечно
+                                //             if (rocSeries.count > 120) { // Держим чуть больше, чем max, для плавности
+                                //                 rocSeries.remove(0);
+                                //                 velSeries.remove(0);
+                                //                 curSeries.remove(0);
+                                //                 // weiSeries.remove(0);
+                                //             }
+                                //         }
+                                //     }
 
-                                    // Подключаемся к сигналу из Python
-                                    Connections {
-                                        target: scaleController
-                                        function onRocChanged() {
-                                            rocChart.updateChart(scaleController.ROC, motorController.velocity, 
-                                                        motorController.actualCurrent, scaleController.weight);
-                                        }
-                                    }
-                                }
+                                //     // Подключаемся к сигналу из Python
+                                //     Connections {
+                                //         target: scaleController
+                                //         function onRocChanged() {
+                                //             rocChart.updateChart(scaleController.ROC, motorController.velocity, 
+                                //                         motorController.actualCurrent, scaleController.weight);
+                                //         }
+                                //     }
+                                // }
 
                             }
                         }
