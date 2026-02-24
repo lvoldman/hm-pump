@@ -1040,10 +1040,10 @@ class MAXON_Motor:
     def go2pos(self, new_position, velocity = None, acceleration = None, deceleration = None, stall=None)->bool:
         if not self.mutualControl():
             return False
-        if not acceleration == None:
-            self.ACCELERATION = int(acceleration)
-        if not deceleration == None:
-            self.DECELERATION = int(deceleration)
+        if  acceleration == None:
+            acceleration = self.ACCELERATION
+        if  deceleration == None:
+            deceleration = self.DECELERATION
 
         self.new_pos = new_position
         if velocity == None:
@@ -1052,7 +1052,7 @@ class MAXON_Motor:
         self.success_flag = True
         self.possition_control_mode = True
         self.time_control_mode = False 
-        print_log(f'MAXON GO2POS {new_position} velocity = {velocity}, Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID}, acc = {self.ACCELERATION}, dec = {self.DECELERATION} ')
+        print_log(f'MAXON GO2POS {new_position} velocity = {velocity}, Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID}, acc = {acceleration}, dec = {deceleration} ')
         try:
             pErrorCode = c_uint()
 
@@ -1068,7 +1068,7 @@ class MAXON_Motor:
                 if pErrorCode.value != 0:
                     raise Exception(f'ERROR enabling Device. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
                 MAXON_Motor.epos.VCS_SetPositionProfile(self.keyHandle, self.mDev_nodeID, int(velocity), \
-                                                        self.ACCELERATION, self.DECELERATION, byref(pErrorCode)) 
+                                                        int(acceleration), int(deceleration), byref(pErrorCode)) 
                 if pErrorCode.value != 0:
                     print_err(f'WARNING setting Position Profile. Handle={self.keyHandle}, nodeID = {self.mDev_nodeID}, velocity = {velocity}, pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
                 MAXON_Motor.epos.VCS_MoveToPosition(self.keyHandle, self.mDev_nodeID, new_position, True, True, byref(pErrorCode)) 
@@ -1138,6 +1138,12 @@ class MAXON_Motor:
         if not self.mutualControl():
             return False
         
+        if  acceleration == None:
+            acceleration = self.ACCELERATION
+        if  deceleration == None:
+            deceleration = self.DECELERATION
+
+
         if not velocity == None:
             self.rpm = int(velocity)
 
@@ -1165,7 +1171,7 @@ class MAXON_Motor:
                     raise Exception(f'ERROR halting device (speed = 0). pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
            
             elif (self.rpm != 0):
-                print_log(f'Going forward on port = {self.mDev_port}, velocity = {self.rpm}, Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID}, acc = {self.ACCELERATION}, dec = {self.DECELERATION}')
+                print_log(f'Going forward on port = {self.mDev_port}, velocity = {self.rpm}, Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID}, acc = {acceleration}, dec = {deceleration}')
 
                 MAXON_Motor.epos.VCS_ActivateProfileVelocityMode(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
                 if pErrorCode.value != 0:
@@ -1173,7 +1179,7 @@ class MAXON_Motor:
                 MAXON_Motor.epos.VCS_SetEnableState(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
                 if pErrorCode.value != 0:
                     raise Exception(f'ERROR enabling Device. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-                MAXON_Motor.epos.VCS_SetVelocityProfile(self.keyHandle, self.mDev_nodeID, self.ACCELERATION, self.DECELERATION, byref(pErrorCode))
+                MAXON_Motor.epos.VCS_SetVelocityProfile(self.keyHandle, self.mDev_nodeID, int(acceleration), int(deceleration), byref(pErrorCode))
                 if pErrorCode.value != 0:
                     print_err(f'WARNING: Setting Velocity Profile: VCS_SetVelocityProfile(Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID})  pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
                 MAXON_Motor.epos.VCS_MoveWithVelocity(self.keyHandle, self.mDev_nodeID, self.rpm, byref(pErrorCode))
@@ -1205,6 +1211,12 @@ class MAXON_Motor:
         if not self.mutualControl():
             return False
         
+        if  acceleration == None:
+            acceleration = self.ACCELERATION
+        if  deceleration == None:
+            deceleration = self.DECELERATION
+
+
         if not velocity == None:
             self.rpm = int(velocity)
 
@@ -1235,7 +1247,7 @@ class MAXON_Motor:
                     raise Exception(f'ERROR halting device (speed = 0). pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
            
             elif (self.rpm != 0):
-                print_log(f'Going backward on port = {self.mDev_port}, velocity = {self.rpm}, Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID}, acc = {self.ACCELERATION}, dec = {self.DECELERATION}')
+                print_log(f'Going backward on port = {self.mDev_port}, velocity = {self.rpm}, Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID}, acc = {acceleration}, dec = {deceleration}')
 
                 MAXON_Motor.epos.VCS_ActivateProfileVelocityMode(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
                 if pErrorCode.value != 0:
@@ -1243,7 +1255,7 @@ class MAXON_Motor:
                 MAXON_Motor.epos.VCS_SetEnableState(self.keyHandle, self.mDev_nodeID, byref(pErrorCode))
                 if pErrorCode.value != 0:
                     raise Exception(f'ERROR enabling Device. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
-                MAXON_Motor.epos.VCS_SetVelocityProfile(self.keyHandle, self.mDev_nodeID, self.ACCELERATION, self.DECELERATION, byref(pErrorCode))
+                MAXON_Motor.epos.VCS_SetVelocityProfile(self.keyHandle, self.mDev_nodeID, int(acceleration), int(deceleration), byref(pErrorCode))
                 if pErrorCode.value != 0:
                     print_err(f'WARNING: Setting Velocity Profile: VCS_SetVelocityProfile(Handle = {self.keyHandle}, nodeID = {self.mDev_nodeID})  pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
                 MAXON_Motor.epos.VCS_MoveWithVelocity(self.keyHandle, self.mDev_nodeID, (-1)*self.rpm, byref(pErrorCode))

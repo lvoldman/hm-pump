@@ -500,7 +500,7 @@ ApplicationWindow {
                                 Label { text: "rpm=" }
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    height: 50
+                                    height: 90
                                     color: "#0A0B0E" // Почти черный "экран"
                                     border.color: "#444"
                                     radius: 4
@@ -508,9 +508,9 @@ ApplicationWindow {
                                     Label {
                                         anchors.centerIn: parent
                                         // text: scaleController.weight.toFixed(5) + " kg"
-                                        text: motorController.velocity + " r/m"
+                                        text: motorController.velocity + " rpm"
                                         color: "#00E5FF" // Цифровой голубой
-                                        font.pixelSize: 40
+                                        font.pixelSize: 80
                                         minimumPixelSize: 8
                                         fontSizeMode: Text.Fit
                                         font.family: "Courier New"
@@ -520,7 +520,7 @@ ApplicationWindow {
                                 Label { text: "Q(dw/dt)=" }
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    height: 50
+                                    height: 90
                                     color: "#0A0B0E"
                                     border.color: "#444"
                                     Label {
@@ -528,11 +528,11 @@ ApplicationWindow {
                                         // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.weight / runningTimer.seconds).toFixed(2) : "0.00") + " kg/s"
                                         // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.ROC).toFixed(2) : "0.00") + " kg/s"
                                         // text: "Q = " + (scaleController.ROC).toFixed(5)  + " l/m"
-                                        text: (scaleController.ROC).toFixed(3)
+                                        text: (scaleController.ROC).toFixed(3) + " L/min"
                                         // color: "#FFA500" // Оранжевый для производных данных
                                         color: "#00E5FF" // Blue
                                         // font.pixelSize: 20
-                                        font.pixelSize: 40
+                                        font.pixelSize: 80
                                         minimumPixelSize: 8
                                         fontSizeMode: Text.Fit
 
@@ -563,7 +563,7 @@ ApplicationWindow {
                                 RowLayout {
                                     Label { text: "Poll interval (ms):" }
                                     SpinBox {
-                                        from: 50; to: 5000; value: 100; stepSize: 50; editable: true
+                                        from: 100; to: 5000; value: 500; stepSize: 100; editable: true
                                         onValueModified:{
                                             let val = value / 1000;
                                             if (!isNaN(val) && val !== null) {
