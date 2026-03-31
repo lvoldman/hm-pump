@@ -8,16 +8,18 @@ __maintainer__ = "Leonid Voldman"
 __email__ = "vleonid@voldman.com"
 __status__ = "production"
 
+import os
+os.environ["QT_LOGGING_RULES"] = "qt.qml.binding.debug=true;qt.remoteobjects.debug=true"
+
 import logging
 import sys
 import platform
 from pathlib import Path
 from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
-from PySide6.QtCore import QObject, Signal, Property, Slot, QUrl, qInstallMessageHandler, QtMsgType
+from PySide6.QtCore import QObject,  Property,  QUrl, qInstallMessageHandler, QtMsgType, qVersion
 
-import os
-os.environ["QT_LOGGING_RULES"] = "qt.qml.binding.debug=true;qt.remoteobjects.debug=true"
+
 
 from dataclasses import dataclass
 from queue import Queue
@@ -54,7 +56,7 @@ class AppInfo(QObject):
     
     @Property(str, constant=True)
     def pySideVersion(self):
-        return PySide6.QtCore.qVersion()
+        return qVersion()
     
     @Property(str, constant=True)
     def cpuLoad(self):

@@ -497,47 +497,332 @@ ApplicationWindow {
                                     }
                                 }
 
-                                Label { text: "rpm=" }
-                                Rectangle {
+// ================================================ 
+                                RowLayout {
                                     Layout.fillWidth: true
-                                    height: 90
-                                    color: "#0A0B0E" // Почти черный "экран"
-                                    border.color: "#444"
-                                    radius: 4
+                                    Layout.alignment: Qt.AlignHCenter
+                                    spacing: 18
 
-                                    Label {
-                                        anchors.centerIn: parent
-                                        // text: scaleController.weight.toFixed(5) + " kg"
-                                        text: motorController.velocity + " rpm"
-                                        color: "#00E5FF" // Цифровой голубой
-                                        font.pixelSize: 80
-                                        minimumPixelSize: 8
-                                        fontSizeMode: Text.Fit
-                                        font.family: "Courier New"
+
+// ================================================Gauge component================================================
+                                    
+                                    ColumnLayout {
+                                        spacing: 8
+                                        Label {
+                                            text: "RPM"
+                                            color: "#8A919E"
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                            Layout.alignment: Qt.AlignHCenter
+                                        }
+
+                                        Rectangle {
+                                            id: velocityGauge
+                                            Layout.fillWidth: true
+                                            Layout.preferredWidth: 260
+                                            Layout.preferredHeight: 260
+                                            color: "#161920"
+                                            border.color: "#3A414D"
+                                            border.width: 1
+                                            radius: 6
+
+                                            property real minValue: 0
+                                            property real maxValue: 30000
+                                            property real value: Math.abs(Number(motorController.velocity))
+                                            property real safeValue: isNaN(value) ? 0 : Math.max(minValue, Math.min(maxValue, value))
+                                            property real ratio: (safeValue - minValue) / (maxValue - minValue)
+                                            // Label {
+                                            //     anchors.top: parent.top
+                                            //     anchors.horizontalCenter: parent.horizontalCenter
+                                            //     anchors.topMargin: 10
+                                            //     text: "RPM"
+                                            //     color: "#8A919E"
+                                            //     font.pixelSize: 12
+                                            //     font.bold: true
+                                            // }
+
+                                            Canvas {
+                                                id: gaugeCanvas
+                                                anchors.fill: parent
+                                                anchors.margins: 16
+
+                                                property real gaugeValue: velocityGauge.safeValue
+
+                                                onGaugeValueChanged: requestPaint()
+                                                onWidthChanged: requestPaint()
+                                                onHeightChanged: requestPaint()
+
+                                                onPaint: {
+                                                    const ctx = getContext("2d")
+                                                    ctx.reset()
+
+                                                    const w = width
+                                                    const h = height
+                                                    const cx = w / 2
+                                                    const cy = h / 2
+                                                    const r = Math.min(w, h) / 2 - 10
+
+                                                    const startAngle = Math.PI * 0.75
+                                                    const endAngle = Math.PI * 2.25
+                                                    const valueAngle = startAngle + (endAngle - startAngle) * velocityGauge.ratio
+
+                                                    ctx.lineCap = "round"
+
+                                                    ctx.beginPath()
+                                                    ctx.strokeStyle = "#2A313D"
+                                                    ctx.lineWidth = 16
+                                                    ctx.arc(cx, cy, r, startAngle, endAngle, false)
+                                                    ctx.stroke()
+
+                                                    ctx.beginPath()
+                                                    ctx.strokeStyle = "#00E5FF"
+                                                    ctx.lineWidth = 16
+                                                    ctx.arc(cx, cy, r, startAngle, valueAngle, false)
+                                                    ctx.stroke()
+
+                                                    for (let i = 0; i <= 10; i++) {
+                                                        const a = startAngle + (endAngle - startAngle) * (i / 10.0)
+                                                        const r1 = r - 18
+                                                        const r2 = r - 4
+                                                        const x1 = cx + Math.cos(a) * r1
+                                                        const y1 = cy + Math.sin(a) * r1
+                                                        const x2 = cx + Math.cos(a) * r2
+                                                        const y2 = cy + Math.sin(a) * r2
+
+                                                        ctx.beginPath()
+                                                        ctx.strokeStyle = "#7E8794"
+                                                        ctx.lineWidth = 2
+                                                        ctx.moveTo(x1, y1)
+                                                        ctx.lineTo(x2, y2)
+                                                        ctx.stroke()
+                                                    }
+
+                                                    ctx.beginPath()
+                                                    ctx.fillStyle = "#0F1117"
+                                                    ctx.arc(cx, cy, 10, 0, Math.PI * 2, false)
+                                                    ctx.fill()
+
+                                                    const nr = r - 28
+                                                    const nx = cx + Math.cos(valueAngle) * nr
+                                                    const ny = cy + Math.sin(valueAngle) * nr
+
+                                                    ctx.beginPath()
+                                                    ctx.strokeStyle = "#FFA500"
+                                                    ctx.lineWidth = 4
+                                                    ctx.moveTo(cx, cy)
+                                                    ctx.lineTo(nx, ny)
+                                                    ctx.stroke()
+                                                }
+
+                                                Component.onCompleted: requestPaint()
+                                            }
+
+                                            Column {
+                                                anchors.centerIn: parent
+                                                spacing: 4
+
+                                                // Label {
+                                                //     anchors.horizontalCenter: parent.horizontalCenter
+                                                //     text: "RPM"
+                                                //     color: "#8A919E"
+                                                //     font.pixelSize: 12
+                                                //     font.bold: true
+                                                // }
+
+                                                Label {
+                                                    anchors.horizontalCenter: parent.horizontalCenter
+                                                    text: Math.round(velocityGauge.safeValue)
+                                                    color: "#00E5FF"
+                                                    font.pixelSize: 34
+                                                    font.family: "Courier New"
+                                                    font.bold: true
+                                                }
+
+                                                Label {
+                                                    anchors.horizontalCenter: parent.horizontalCenter
+                                                    text: "0 - 30000"
+                                                    color: "#6F7782"
+                                                    font.pixelSize: 10
+                                                }
+                                            }
+                                        }
+                                    }
+    // ================================================
+
+
+
+    // ================================================================ROC bar component================================================
+                                    ColumnLayout {
+                                        Layout.preferredWidth: 90
+                                        Layout.preferredHeight: 300
+                                        spacing: 8
+
+                                        Label {
+                                            anchors.top: parent.top
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            anchors.topMargin: 10
+                                            text: "ROC"
+                                            color: "#8A919E"
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                        }
+
+                                        Rectangle {
+                                            id: rocBar
+                                            Layout.preferredWidth: 90
+                                            Layout.preferredHeight: 260
+                                            color: "#161920"
+                                            border.color: "#3A414D"
+                                            border.width: 1
+                                            radius: 6
+
+                                            property real minValue: 0
+                                            property real maxValue: 50
+                                            property real value: Number(scaleController.ROC)
+                                            property real safeValue: isNaN(value) ? 0 : Math.max(minValue, Math.min(maxValue, value))
+                                            property real ratio: (safeValue - minValue) / (maxValue - minValue)
+
+                                            // Label {
+                                            //     anchors.top: parent.top
+                                            //     anchors.horizontalCenter: parent.horizontalCenter
+                                            //     anchors.topMargin: 10
+                                            //     text: "ROC"
+                                            //     color: "#8A919E"
+                                            //     font.pixelSize: 12
+                                            //     font.bold: true
+                                            // }
+
+                                            Rectangle {
+                                                id: barTrack
+                                                anchors.top: parent.top
+                                                anchors.bottom: parent.bottom
+                                                anchors.topMargin: 36
+                                                anchors.bottomMargin: 36
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                width: 28
+                                                radius: 4
+                                                color: "#0A0B0E"
+                                                border.color: "#444"
+
+                                                Rectangle {
+                                                    anchors.bottom: parent.bottom
+                                                    anchors.left: parent.left
+                                                    anchors.right: parent.right
+                                                    height: parent.height * rocBar.ratio
+                                                    radius: 4
+                                                    color: "#00E5FF"
+                                                }
+
+                                                Repeater {
+                                                    model: 6
+                                                    Rectangle {
+                                                        width: 10
+                                                        height: 1
+                                                        color: "#7E8794"
+                                                        anchors.right: parent.left
+                                                        anchors.rightMargin: 6
+                                                        // y: (barTrack.height - height) - (index * (barTrack.height / 5))
+                                                        y: barTrack.y + (barTrack.height - height) - (index * (barTrack.height / 5))
+
+                                                    }
+                                                }
+                                            }
+                                            Repeater {
+                                                model: 6
+
+                                                Label {
+                                                    required property int index
+
+                                                    // text: (rocBar.maxValue * (5 - index) / 5).toFixed(0)
+                                                    text: (rocBar.maxValue * (index) / 5).toFixed(0)
+                                                    color: "#6F7782"
+                                                    font.pixelSize: 10
+
+                                                    anchors.right: barTrack.left
+                                                    anchors.rightMargin: 14
+
+                                                    y: barTrack.y + (barTrack.height - height) - (index * (barTrack.height / 5)) - height / 2
+                                                }
+                                            }
+
+                                            // Column {
+                                            //     anchors.right: barTrack.left
+                                            //     anchors.rightMargin: 14
+                                            //     anchors.verticalCenter: barTrack.verticalCenter
+                                            //     spacing: 31
+
+                                            //     Repeater {
+                                            //         model: 6
+                                            //         Label {
+                                            //             required property int index
+                                            //             // text: (rocBar.maxValue * (5 - index) / 5).toFixed(1)
+                                            //             text: (rocBar.maxValue * (5 - index) / 5)
+                                            //             color: "#6F7782"
+                                            //             font.pixelSize: 10
+                                            //         }
+                                            //     }
+                                            // }
+
+                                        }
+                                        Label {
+                                            Layout.alignment: Qt.AlignHCenter
+                                            text: rocBar.safeValue.toFixed(3) + " L/min"
+                                            color: "#FFA500"
+                                            font.pixelSize: 16
+                                            font.family: "Courier New"
+                                            font.bold: true
+                                        }
                                     }
                                 }
 
-                                Label { text: "Q(dw/dt)=" }
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    height: 90
-                                    color: "#0A0B0E"
-                                    border.color: "#444"
-                                    Label {
-                                        anchors.centerIn: parent
-                                        // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.weight / runningTimer.seconds).toFixed(2) : "0.00") + " kg/s"
-                                        // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.ROC).toFixed(2) : "0.00") + " kg/s"
-                                        // text: "Q = " + (scaleController.ROC).toFixed(5)  + " l/m"
-                                        text: (scaleController.ROC).toFixed(3) + " L/min"
-                                        // color: "#FFA500" // Оранжевый для производных данных
-                                        color: "#00E5FF" // Blue
-                                        // font.pixelSize: 20
-                                        font.pixelSize: 80
-                                        minimumPixelSize: 8
-                                        fontSizeMode: Text.Fit
+    
+// ================================================
 
-                                    }
-                                }
+
+                                // Label { text: "rpm=" }
+                                // Rectangle {
+                                //     Layout.fillWidth: true
+                                //     height: 90
+                                //     color: "#0A0B0E" // Почти черный "экран"
+                                //     border.color: "#444"
+                                //     radius: 4
+
+                                //     Label {
+                                //         anchors.centerIn: parent
+                                //         // text: scaleController.weight.toFixed(5) + " kg"
+                                //         text: motorController.velocity + " rpm"
+                                //         color: "#00E5FF" // Цифровой голубой
+                                //         // font.pixelSize: 80
+                                //         font.pixelSize: 20
+                                //         minimumPixelSize: 8
+                                //         fontSizeMode: Text.Fit
+                                //         font.family: "Courier New"
+                                //     }
+                                // }
+
+
+
+                                // Label { text: "Q(dw/dt)=" }
+                                // Rectangle {
+                                //     Layout.fillWidth: true
+                                //     height: 90
+                                //     color: "#0A0B0E"
+                                //     border.color: "#444"
+                                //     Label {
+                                //         anchors.centerIn: parent
+                                //         // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.weight / runningTimer.seconds).toFixed(2) : "0.00") + " kg/s"
+                                //         // text: "Rate of Change (ROC): " + (motorController.isMoving ? (scaleController.ROC).toFixed(2) : "0.00") + " kg/s"
+                                //         // text: "Q = " + (scaleController.ROC).toFixed(5)  + " l/m"
+                                //         text: (scaleController.ROC).toFixed(3) + " L/min"
+                                //         // color: "#FFA500" // Оранжевый для производных данных
+                                //         color: "#00E5FF" // Blue
+                                //         font.pixelSize: 20
+                                //         // font.pixelSize: 80
+                                //         minimumPixelSize: 8
+                                //         fontSizeMode: Text.Fit
+
+                                //     }
+                                // }
 
                                 
                                 // TextField {
