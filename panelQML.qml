@@ -655,6 +655,8 @@ ApplicationWindow {
                                     ColumnLayout {
                                         Layout.preferredWidth: 90
                                         Layout.preferredHeight: 300
+                                        Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
+
                                         spacing: 8
 
                                         Label {
@@ -675,9 +677,10 @@ ApplicationWindow {
                                             border.color: "#3A414D"
                                             border.width: 1
                                             radius: 6
+                                            Layout.alignment: Qt.AlignHCenter
 
                                             property real minValue: 0
-                                            property real maxValue: 50
+                                            property real maxValue: 7
                                             property real value: Number(scaleController.ROC)
                                             property real safeValue: isNaN(value) ? 0 : Math.max(minValue, Math.min(maxValue, value))
                                             property real ratio: (safeValue - minValue) / (maxValue - minValue)
@@ -704,6 +707,7 @@ ApplicationWindow {
                                                 color: "#0A0B0E"
                                                 border.color: "#444"
 
+
                                                 Rectangle {
                                                     anchors.bottom: parent.bottom
                                                     anchors.left: parent.left
@@ -714,7 +718,7 @@ ApplicationWindow {
                                                 }
 
                                                 Repeater {
-                                                    model: 6
+                                                    model: 8
                                                     Rectangle {
                                                         width: 10
                                                         height: 1
@@ -722,26 +726,27 @@ ApplicationWindow {
                                                         anchors.right: parent.left
                                                         anchors.rightMargin: 6
                                                         // y: (barTrack.height - height) - (index * (barTrack.height / 5))
-                                                        y: barTrack.y + (barTrack.height - height) - (index * (barTrack.height / 5))
-
+                                                        // y: barTrack.y + (barTrack.height - height) - (index * (barTrack.height / 7))
+                                                        y: (barTrack.height - height) - (index * (barTrack.height / 7))
                                                     }
                                                 }
                                             }
                                             Repeater {
-                                                model: 6
+                                                model: 8
 
                                                 Label {
                                                     required property int index
 
                                                     // text: (rocBar.maxValue * (5 - index) / 5).toFixed(0)
-                                                    text: (rocBar.maxValue * (index) / 5).toFixed(0)
+                                                    text: (rocBar.maxValue * (index) / 7).toFixed(0)
                                                     color: "#6F7782"
                                                     font.pixelSize: 10
 
                                                     anchors.right: barTrack.left
                                                     anchors.rightMargin: 14
 
-                                                    y: barTrack.y + (barTrack.height - height) - (index * (barTrack.height / 5)) - height / 2
+                                                    y: barTrack.y + (barTrack.height - height) - (index * (barTrack.height / 7)) - height / 2
+                                                    
                                                 }
                                             }
 
@@ -767,8 +772,13 @@ ApplicationWindow {
                                         Label {
                                             Layout.alignment: Qt.AlignHCenter
                                             text: rocBar.safeValue.toFixed(3) + " L/min"
-                                            color: "#FFA500"
-                                            font.pixelSize: 16
+                                            // color: "#FFA500"
+                                            // font.pixelSize: 16
+                                            // font.family: "Courier New"
+                                            // font.bold: true
+
+                                            color: "#00E5FF"
+                                            font.pixelSize: 25
                                             font.family: "Courier New"
                                             font.bold: true
                                         }
