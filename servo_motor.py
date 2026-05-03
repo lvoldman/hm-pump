@@ -9,8 +9,8 @@ from common_utils import print_err, print_DEBUG, print_warn, print_log, exptTrac
                         print_call_stack
 from shiboken6 import isValid
 
-# motServo = MAXON_Motor_Stub # For testing purposes, replace with MAXON_Motor for actual implementation
-motServo = MAXON_Motor      #   For actual implementation
+motServo = MAXON_Motor_Stub # For testing purposes, replace with MAXON_Motor for actual implementation
+# motServo = MAXON_Motor      #   For actual implementation
 
 @dataclass
 class servoParameters:
@@ -184,6 +184,12 @@ class servoMotor(QObject):
             exptTrace(ex)
          
 
+    # @position.setter
+    # def position(self):
+    #     print_err('Position is a read-only property')
+
+
+
     @Property(int, notify=positionChanged)
     def position(self) -> int:
         try:
@@ -284,7 +290,46 @@ class servoMotor(QObject):
         self.backward(params)
         return True
     
+    @Slot(int, result=bool)
+    def updateRunningVelocity(self, vel: int) -> bool:
+        print_log(f'Update running velocity command received: vel={vel} for motor:{self}')
+
+        if not self._motor:
+            print_err('No motor initialized')
+            return False
+
+        if not self._motor.is_motor_in_motion():
+            print_warn(f'Motor {self._current_sn} is not in motion, velocity update ignored')
+            return False
+
+        try:
+            # vel = abs(int(vel))
+            vel = int(vel)
+            vel = max(1, min(30000, vel))
+
+            with self.__op_lock:
+                current_op = self.__current_op
+
+            if current_op == servoMotor.opType.forward:
+                status = self._motor.mDev_update_forward_velocity(vel)
+            elif current_op == servoMotor.opType.backward:
+                status = self._motor.mDev_update_backward_velocity(vel)
+            else:
+                print_warn(f'Velocity update is allowed only for forward/backward, current op={current_op}')
+                return False
+
+            if status:
+                self.__velocity = self._motor.mDev_get_cur_velocity()
+                self.velocityChanged.emit(self.__velocity)
+
+            return status
+
+        except Exception as ex:
+            print_err(f'Error updating running velocity to {vel}: {ex}')
+            exptTrace(ex)
+            return False
     
+
     def getPosition(self)->float:
         if not self._motor:
             return 0.0

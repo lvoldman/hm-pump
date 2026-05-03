@@ -298,12 +298,161 @@ ApplicationWindow {
                                     opacity: enabled ? 1.0 : 0.5 // Visual feedback when disabled
                                     Behavior on opacity { NumberAnimation { duration: 200 } }
 
-                                    Label { text: "Velocity:" }
-                                    SpinBox { enabled: !motorController.isMoving; id: velocity; from: 1; to: 30000; value: 1000; editable: true }
+                                    // Label { text: "Velocity:" }
+                                    // SpinBox { enabled: !motorController.isMoving; id: velocity; from: 1; to: 30000; value: 1000; stepSize: 100 ; editable: true }
 
+
+                                    // Label { text: "Current velocity:" }
+                                    // TextField { readOnly: true; color: "#FFA500"; text: motorController?.velocity ?? "—" }
+
+                                    Label { text: "Velocity:" }
+                                    SpinBox { enabled: !motorController.isMoving; id: velocity; from: 1; to: 30000; value: 1000; stepSize: 100; editable: true }
 
                                     Label { text: "Current velocity:" }
                                     TextField { readOnly: true; color: "#FFA500"; text: motorController?.velocity ?? "—" }
+
+                                    // Item { }
+                                    // Item { }
+
+                                    // Label { text: "Live adjust:" }
+                                    // Slider {
+                                    //     id: liveVelocitySlider
+                                    //     from: 1
+                                    //     to: 30000
+                                    //     value: velocity.value
+                                    //     stepSize: 100
+                                    //     enabled: motorController.isMoving
+                                    //     Layout.fillWidth: true
+                                    // }
+                                    
+                                    // Item { }
+                                    // Item { }
+
+                                    // Item { }
+                                    // Label {
+                                    //     text: motorController.isMoving
+                                    //         ? "Live: " + Math.round(liveVelocitySlider.value) + " rpm"
+                                    //         : "Live adjust available while running"
+                                    //     color: motorController.isMoving ? "#00E5FF" : "#8A919E"
+                                    //     font.pixelSize: 10
+                                    // }
+
+
+                                    // Item { }
+                                    // Item { }
+
+                                    // Label { text: "Live adjust:" }
+                                    // ColumnLayout {
+                                    //     Layout.fillWidth: true
+                                    //     spacing: 4
+
+                                    //     Slider {
+                                    //         id: liveVelocitySlider
+                                    //         from: -5
+                                    //         to: 5
+                                    //         stepSize: 1
+                                    //         snapMode: Slider.SnapAlways
+                                    //         value: 0
+                                    //         enabled: motorController.isMoving
+                                    //         Layout.fillWidth: true
+                                    //     }
+
+                                    //     RowLayout {
+                                    //         Layout.fillWidth: true
+                                    //         spacing: 8
+
+                                    //         Label {
+                                    //             text: "Step:"
+                                    //             color: "#8A919E"
+                                    //             font.pixelSize: 10
+                                    //         }
+
+                                    //         SpinBox {
+                                    //             id: liveVelocityStep
+                                    //             from: 50
+                                    //             to: 2000
+                                    //             stepSize: 50
+                                    //             value: 100
+                                    //             editable: true
+                                    //         }
+
+                                    //         Label {
+                                    //             text: "rpm"
+                                    //             color: "#8A919E"
+                                    //             font.pixelSize: 10
+                                    //         }
+
+                                    //         Item { Layout.fillWidth: true }
+
+                                    //         Label {
+                                    //             text: motorController.isMoving
+                                    //                 ? "Live: " + Math.round(velocity.value + liveVelocitySlider.value * liveVelocityStep.value) + " rpm"
+                                    //                 : "Live adjust available while running"
+                                    //             color: motorController.isMoving ? "#00E5FF" : "#8A919E"
+                                    //             font.pixelSize: 10
+                                    //         }
+                                    //     }
+                                    // }                                
+
+                                    Item { }
+                                    Item { }
+
+                                    Label { text: "Live adjust:" }
+                                    ColumnLayout {
+                                        spacing: 4
+                                        Layout.alignment: Qt.AlignLeft
+
+                                        Slider {
+                                            id: liveVelocitySlider
+                                            from: -5
+                                            to: 5
+                                            stepSize: 1
+                                            snapMode: Slider.SnapAlways
+                                            value: 0
+                                            enabled: motorController.isMoving
+                                            Layout.preferredWidth: 190
+                                            Layout.alignment: Qt.AlignLeft
+                                            property int liveBaseVelocity: 0
+                                            property int liveStepRpm: 100
+                                            onMoved: {
+                                                if (!motorController.isMoving)
+                                                    return
+
+                                                let target = Math.max(1, Math.round(liveVelocitySlider.liveBaseVelocity + value * liveVelocitySlider.liveStepRpm))
+                                                motorController.updateRunningVelocity(target)
+                                                // let delta = Math.round(value * liveStepRpm)
+                                                // motorController.updateRunningVelocity(delta)
+                                            }
+                                        }
+
+                                        Label {
+                                            // text: motorController.isMoving
+                                            //     ? "Live: " + Math.round(velocity.value + liveVelocitySlider.value * 100) + " rpm"
+                                            //     : "Live adjust available while running"
+                                            text: motorController.isMoving
+                                                // ? "Live: " + Math.max(1, Math.round(liveBaseVelocity + liveVelocitySlider.value * liveStepRpm)) + " rpm"
+                                                ? "Live: " + Math.max(1, Math.round(liveVelocitySlider.liveBaseVelocity + liveVelocitySlider.value * liveVelocitySlider.liveStepRpm)) + " rpm"
+                                                : "Live adjust available while running"
+
+                                            color: motorController.isMoving ? "#00E5FF" : "#8A919E"
+                                            font.pixelSize: 10
+                                        }
+                                        Connections {
+                                            target: motorController
+
+                                            function onStateChanged() {
+                                                if (motorController.isMoving) {
+                                                    // liveBaseVelocity = Math.max(1, Number(motorController.velocity) || velocity.value)
+                                                    liveVelocitySlider.liveBaseVelocity = Math.max(1, Number(motorController.velocity) || velocity.value)
+                                                    liveVelocitySlider.value = 0
+                                                } else {
+                                                    liveVelocitySlider.value = 0
+                                                }
+                                            }
+                                        }                                        
+                                    }
+
+
 
                                     Label { text: "Acceleration:" }
                                     SpinBox { enabled: !motorController.isMoving; id: acceleration; from: 10; to: 10000; value: 2000; editable: true }
@@ -659,10 +808,17 @@ ApplicationWindow {
 
                                         spacing: 8
 
+                                        // Label {
+                                        //     anchors.top: parent.top
+                                        //     anchors.horizontalCenter: parent.horizontalCenter
+                                        //     anchors.topMargin: 10
+                                        //     text: "ROC"
+                                        //     color: "#8A919E"
+                                        //     font.pixelSize: 12
+                                        //     font.bold: true
+                                        // }
                                         Label {
-                                            anchors.top: parent.top
-                                            anchors.horizontalCenter: parent.horizontalCenter
-                                            anchors.topMargin: 10
+                                            Layout.alignment: Qt.AlignHCenter
                                             text: "ROC"
                                             color: "#8A919E"
                                             font.pixelSize: 12

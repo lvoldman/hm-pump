@@ -21,7 +21,7 @@ from common_utils import print_log, print_warn, print_err, print_DEBUG, exptTrac
 from typing import TYPE_CHECKING
 
 
-print_DEBUG = void_f
+# print_DEBUG = void_f
 
 from ctypes import *
 from ctypes import wintypes
@@ -809,6 +809,18 @@ class MAXON_Motor:
         return False
     
 
+    def is_motor_in_motion(self) -> bool:
+        
+        try:
+           if self.wd is not None and self.wd.is_alive():
+                return True
+           else:
+                return False
+        except Exception as ex:
+            e_type, e_filename, e_line_number, e_message = exptTrace(ex)
+            print_err(f'Exception: {ex} of type: {type(ex)} on checking POSITION REACHED status for port {self.mDev_port}.')
+            return False
+        
     
         
     def  mDev_watch_dog_thread(self):
@@ -1206,6 +1218,32 @@ class MAXON_Motor:
 
         return True
     
+    def  mDev_update_forward_velocity(self, velocity = None)->bool:
+        
+        if not velocity == None:
+            self.rpm = int(velocity)
+        else:
+            print_err(f'No velocity value provided for update forward velocity on port = {self.mDev_port}')
+            return False
+
+        try:
+            pErrorCode = c_uint()
+            MAXON_Motor.epos.VCS_MoveWithVelocity(self.keyHandle, self.mDev_nodeID, self.rpm, byref(pErrorCode))
+            if pErrorCode.value != 0:
+                raise Exception(f'ERROR Operating moving with Velocity. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
+
+                                                                                          
+        except Exception as ex:
+                e_type, e_filename, e_line_number, e_message = exptTrace(ex)
+                print_err(f'MAXON forward velocity update failed on port = {self.mDev_port}. Exception: [{ex}] of type: {type(ex)}.')
+                return False
+        else:
+            print_log (f"MAXON forward velocity updated on port = {self.mDev_port}, new velocity = {self.rpm}" )
+ 
+        return True
+
+    
+
     def  mDev_backward(self, velocity = None, acceleration = None, deceleration = None, timeout=None, polarity:bool=None, stall = None)->bool:
 
         if not self.mutualControl():
@@ -1282,6 +1320,31 @@ class MAXON_Motor:
 
         return True
     
+    def  mDev_update_backward_velocity(self, velocity = None)->bool:
+        
+        if not velocity == None:
+            self.rpm = int(velocity)
+        else:
+            print_err(f'No velocity value provided for update backward velocity on port = {self.mDev_port}')
+            return False
+
+        try:
+            pErrorCode = c_uint()
+            MAXON_Motor.epos.VCS_MoveWithVelocity(self.keyHandle, self.mDev_nodeID, (-1)*self.rpm, byref(pErrorCode))
+            if pErrorCode.value != 0:
+                raise Exception(f'ERROR Operating moving with Velocity. pErrorCode =  0x{pErrorCode.value:08x} / {ErrTxt(pErrorCode.value)}')
+
+                                                                                          
+        except Exception as ex:
+                e_type, e_filename, e_line_number, e_message = exptTrace(ex)
+                print_err(f'MAXON backward velocity update failed on port = {self.mDev_port}. Exception: [{ex}] of type: {type(ex)}.')
+                return False
+        else:
+            print_log (f"MAXON backward velocity updated on port = {self.mDev_port}, new velocity = {(-1)*self.rpm}" )
+ 
+        return True
+
+
     
     def mDev_stored_pos(self): 
         return self.mDev_pos
@@ -1436,6 +1499,44 @@ class MAXON_Motor_Stub:
         if abs(self.mDev_pos - target_pos) <= 10:
             return True
         return False
+    
+    def is_motor_in_motion(self) -> bool:
+        
+        try:
+           if self.wd is not None and self.wd.is_alive():
+                return True
+           else:
+                return False
+        except Exception as ex:
+            e_type, e_filename, e_line_number, e_message = exptTrace(ex)
+            print_err(f'Exception: {ex} of type: {type(ex)} on checking POSITION REACHED status for port {self.mDev_port}.')
+            return False
+        
+
+    def  mDev_update_forward_velocity(self, velocity = None)->bool:
+        if not velocity == None:
+            self.rpm = int(velocity)
+        else:
+            print_err(f'No velocity value provided for update forward velocity on port = {self.mDev_port}')
+            return False
+        
+        self.mDev_vel = self.rpm
+        print_DEBUG(f'Updating forward velocity on MAXON Stub port = {self.mDev_port}, dev = {self.devName}, new velocity = {self.rpm}')
+
+        
+        return True
+
+    def  mDev_update_backward_velocity(self, velocity = None)->bool:
+        if not velocity == None:
+            self.rpm = int(velocity)
+        else:
+            print_err(f'No velocity value provided for update backward velocity on port = {self.mDev_port}')
+            return False
+        self.mDev_vel = (-1)*self.rpm
+        print_DEBUG(f'Updating backward velocity on MAXON Stub port = {self.mDev_port}, dev = {self.devName}, new velocity = {self.rpm}')
+
+        
+        return True
         
     def  mDev_watch_dog_thread(self):
         self.__stop_motion.clear()
@@ -1492,6 +1593,7 @@ class MAXON_Motor_Stub:
         self.actual_current = 320
         self.mDev_watch_dog()
         self.mDev_vel = int(velocity) if velocity else 2000
+        self.rpm = int(velocity) if velocity else 2000
         return True
     
     def  mDev_backward(self, velocity = None, acceleration = None, deceleration = None, timeout=None, polarity:bool = None, stall = None)-> bool:
@@ -1500,6 +1602,7 @@ class MAXON_Motor_Stub:
         self.actual_current = 320
         self.mDev_watch_dog()
         self.mDev_vel = -int(velocity) if velocity else -2000
+        self.rpm = int(velocity) if velocity else 2000
         return True
     
     def mDev_stored_pos(self): 
