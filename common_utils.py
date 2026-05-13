@@ -201,19 +201,43 @@ def DCBA_converter(_f_num:float) -> float:              # Float - Little Endian 
 
 
 
-@staticmethod
+# @staticmethod
+# class smartLocker:                              # Mutex mechanism
+#     def __init__(self, lock):
+#         self.lock = lock
+#         if  self.lock:
+#             self.lock.acquire()
+#     def __del__(self): 
+#         if  self.lock and self.lock.locked():
+#             self.lock.release() 
+
+#     def release(self):
+#         if  self.lock and self.lock.locked():
+#             self.lock.release() 
+
+
+import threading
+
 class smartLocker:                              # Mutex mechanism
-    def __init__(self, lock):
+    def __init__(self, lock:threading.Lock = None):
         self.lock = lock
         if  self.lock:
             self.lock.acquire()
+   
     def __del__(self): 
         if  self.lock and self.lock.locked():
             self.lock.release() 
-
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc, tb):
+        pass
+        
     def release(self):
         if  self.lock and self.lock.locked():
             self.lock.release() 
+
 
 
 def clearQ(_Q:Queue):

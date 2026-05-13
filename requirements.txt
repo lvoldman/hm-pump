@@ -1,0 +1,20 @@
+inputimeout==1.0.4
+librt==0.7.8
+markdown-it-py @ file:///C:/Users/task_176700171192930/croot/markdown-it-py_1767001832061/work
+mdurl @ file:///C:/miniconda3/conda-bld/mdurl_1758552280927/work
+mypy==1.19.1
+mypy_extensions==1.1.0
+pathspec==1.0.4
+psutil @ file:///C:/miniconda3/conda-bld/psutil_1761896535983/work
+Pygments @ file:///C:/miniconda3/conda-bld/pygments_1762431426600/work
+pyserial==3.5
+PySide6==6.10.1
+PySide6_Addons==6.10.1
+PySide6_Essentials==6.10.1
+rich @ file:///C:/miniconda3/conda-bld/rich_1760375504689/work
+setuptools==80.9.0
+shiboken6==6.10.1
+typing_extensions==4.15.0
+Unidecode==1.4.0
+wheel==0.45.1
+windows-curses==2.4.1
